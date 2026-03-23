@@ -9,6 +9,8 @@ import projet.app.entity.quality.DataQualityResultCompta;
 import projet.app.repository.quality.DataQualityResultComptaRepository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -135,6 +137,32 @@ public class ComptaDataQualityService {
     }
 
     /**
+     * Fetch rows for Rule 1: rows where any required column is NULL.
+     */
+    public List<Map<String, Object>> fetchNullCheckList() {
+        String sql = """
+            SELECT * FROM staging.stg_compta_raw
+            WHERE agence IS NULL
+               OR devise IS NULL
+               OR compte IS NULL
+               OR chapitre IS NULL
+               OR libellecompte IS NULL
+               OR idtiers IS NULL
+               OR soldeorigine IS NULL
+               OR soldeconvertie IS NULL
+               OR devisebbnq IS NULL
+               OR cumulmvtdb IS NULL
+               OR cumulmvtcr IS NULL
+               OR soldeinitdebmois IS NULL
+               OR amount IS NULL
+               OR actif IS NULL
+            ORDER BY id
+            """;
+
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
      * Rule 2: Count duplicate rows by chapitre, compte, idtiers (keeping first occurrence).
      * No rows are deleted.
      */
@@ -159,6 +187,56 @@ public class ComptaDataQualityService {
     }
 
     /**
+     * Fetch rows for Rule 2: duplicate rows by chapitre, compte, idtiers (excluding first row).
+     */
+    public List<Map<String, Object>> fetchDuplicateList() {
+        String sql = """
+            SELECT c.*
+            FROM staging.stg_compta_raw c
+            JOIN (
+                SELECT id
+                FROM (
+                    SELECT
+                        id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY TRIM(chapitre), TRIM(compte), TRIM(idtiers)
+                            ORDER BY id
+                        ) AS rn
+                    FROM staging.stg_compta_raw
+                    WHERE NULLIF(TRIM(chapitre), '') IS NOT NULL
+                      AND NULLIF(TRIM(compte), '') IS NOT NULL
+                      AND NULLIF(TRIM(idtiers), '') IS NOT NULL
+                ) duplicates
+                WHERE rn > 1
+            ) d ON d.id = c.id
+            ORDER BY c.id
+            """;
+
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    private String buildTypeCheckWhereClause() {
+        String numericRegex = "'^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$'";
+        String integerRegex = "'^-?[0-9]+$'";
+
+        return "(agence IS NOT NULL AND agence <> '' AND agence !~ " + integerRegex + ")" +
+                " OR (compte IS NOT NULL AND compte <> '' AND compte !~ " + integerRegex + ")" +
+                " OR (chapitre IS NOT NULL AND chapitre <> '' AND chapitre !~ " + integerRegex + ")" +
+                " OR (idtiers IS NOT NULL AND idtiers <> '' AND idtiers !~ " + integerRegex + ")" +
+                " OR (actif IS NOT NULL AND actif <> '' AND actif !~ " + integerRegex + ")" +
+                " OR (soldeorigine IS NOT NULL AND soldeorigine <> '' AND soldeorigine !~ " + numericRegex + ")" +
+                " OR (soldeconvertie IS NOT NULL AND soldeconvertie <> '' AND soldeconvertie !~ " + numericRegex + ")" +
+                " OR (cumulmvtdb IS NOT NULL AND cumulmvtdb <> '' AND cumulmvtdb !~ " + numericRegex + ")" +
+                " OR (cumulmvtcr IS NOT NULL AND cumulmvtcr <> '' AND cumulmvtcr !~ " + numericRegex + ")" +
+                " OR (soldeinitdebmois IS NOT NULL AND soldeinitdebmois <> '' AND soldeinitdebmois !~ " + numericRegex + ")" +
+                " OR (amount IS NOT NULL AND amount <> '' AND amount !~ " + numericRegex + ")" +
+                " OR (devise IS NOT NULL AND devise <> '' AND devise ~ " + numericRegex + ")" +
+                " OR (libellecompte IS NOT NULL AND libellecompte <> '' AND libellecompte ~ " + numericRegex + ")" +
+                " OR (devisebbnq IS NOT NULL AND devisebbnq <> '' AND devisebbnq ~ " + numericRegex + ")" +
+                " OR (idcontrat IS NOT NULL AND idcontrat <> '' AND idcontrat ~ " + numericRegex + ")";
+    }
+
+    /**
      * Rule 3: Count rows with invalid data types.
      *
      * Integer columns (must be valid integers):
@@ -175,22 +253,7 @@ public class ComptaDataQualityService {
     private int countRowsWithInvalidTypes() {
         String numericRegex = "'^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$'";
         String integerRegex = "'^-?[0-9]+$'";
-        String whereClause =
-                "(agence IS NOT NULL AND agence <> '' AND agence !~ " + integerRegex + ")" +
-                " OR (compte IS NOT NULL AND compte <> '' AND compte !~ " + integerRegex + ")" +
-                " OR (chapitre IS NOT NULL AND chapitre <> '' AND chapitre !~ " + integerRegex + ")" +
-                " OR (idtiers IS NOT NULL AND idtiers <> '' AND idtiers !~ " + integerRegex + ")" +
-                " OR (actif IS NOT NULL AND actif <> '' AND actif !~ " + integerRegex + ")" +
-                " OR (soldeorigine IS NOT NULL AND soldeorigine <> '' AND soldeorigine !~ " + numericRegex + ")" +
-                " OR (soldeconvertie IS NOT NULL AND soldeconvertie <> '' AND soldeconvertie !~ " + numericRegex + ")" +
-                " OR (cumulmvtdb IS NOT NULL AND cumulmvtdb <> '' AND cumulmvtdb !~ " + numericRegex + ")" +
-                " OR (cumulmvtcr IS NOT NULL AND cumulmvtcr <> '' AND cumulmvtcr !~ " + numericRegex + ")" +
-                " OR (soldeinitdebmois IS NOT NULL AND soldeinitdebmois <> '' AND soldeinitdebmois !~ " + numericRegex + ")" +
-                " OR (amount IS NOT NULL AND amount <> '' AND amount !~ " + numericRegex + ")" +
-                " OR (devise IS NOT NULL AND devise <> '' AND devise ~ " + numericRegex + ")" +
-                " OR (libellecompte IS NOT NULL AND libellecompte <> '' AND libellecompte ~ " + numericRegex + ")" +
-                " OR (devisebbnq IS NOT NULL AND devisebbnq <> '' AND devisebbnq ~ " + numericRegex + ")" +
-                " OR (idcontrat IS NOT NULL AND idcontrat <> '' AND idcontrat ~ " + numericRegex + ")";
+        String whereClause = buildTypeCheckWhereClause();
 
         int count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM staging.stg_compta_raw WHERE " + whereClause, Integer.class);
@@ -243,6 +306,14 @@ public class ComptaDataQualityService {
         }
 
         return count;
+    }
+
+    /**
+     * Fetch rows for Rule 3: rows with invalid data types.
+     */
+    public List<Map<String, Object>> fetchTypeCheckList() {
+        String sql = "SELECT * FROM staging.stg_compta_raw WHERE " + buildTypeCheckWhereClause() + " ORDER BY id";
+        return jdbcTemplate.queryForList(sql);
     }
 
     /**
@@ -311,6 +382,24 @@ public class ComptaDataQualityService {
     }
 
     /**
+     * Fetch rows for Rule 5a: idcontrat does not exist in stg_contrat_raw.
+     */
+    public List<Map<String, Object>> fetchContratRelationCheckList() {
+        String sql = """
+            SELECT c.* FROM staging.stg_compta_raw c
+            WHERE c.idcontrat IS NOT NULL
+              AND c.idcontrat <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM staging.stg_contrat_raw cr
+                  WHERE cr.idcontrat = c.idcontrat
+              )
+            ORDER BY c.id
+            """;
+
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
      * Rule 5b: Count rows where idtiers does not exist in stg_tiers_raw.
      * Logs a sample of 10 affected rows (id + idtiers).
      */
@@ -334,6 +423,24 @@ public class ComptaDataQualityService {
         }
 
         return count;
+    }
+
+    /**
+     * Fetch rows for Rule 5b: idtiers does not exist in stg_tiers_raw.
+     */
+    public List<Map<String, Object>> fetchTiersRelationCheckList() {
+        String sql = """
+            SELECT c.* FROM staging.stg_compta_raw c
+            WHERE c.idtiers IS NOT NULL
+              AND c.idtiers <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM staging.stg_tiers_raw t
+                  WHERE t.idtiers = c.idtiers
+              )
+            ORDER BY c.id
+            """;
+
+        return jdbcTemplate.queryForList(sql);
     }
 
     @lombok.Data

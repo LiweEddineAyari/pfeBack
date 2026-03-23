@@ -287,6 +287,126 @@ public class EtlController {
     }
 
     /**
+     * Fetch Rule 1 list for COMPTA:
+     * rows where any required column is NULL.
+     * GET /api/etl/quality/compta/null-check/list
+     */
+    @GetMapping("/quality/compta/null-check/list")
+    public ResponseEntity<?> fetchComptaNullCheckList() {
+        try {
+            List<Map<String, Object>> rows = comptaDataQualityService.fetchNullCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "nullCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching COMPTA null-check list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 2 list for COMPTA:
+     * duplicate rows by chapitre, compte, idtiers (keeping first occurrence).
+     * GET /api/etl/quality/compta/duplicate/list
+     */
+    @GetMapping("/quality/compta/duplicate/list")
+    public ResponseEntity<?> fetchComptaDuplicateList() {
+        try {
+            List<Map<String, Object>> rows = comptaDataQualityService.fetchDuplicateList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "duplicate",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching COMPTA duplicate list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 3 list for COMPTA:
+     * rows with invalid data types.
+     * GET /api/etl/quality/compta/type-check/list
+     */
+    @GetMapping("/quality/compta/type-check/list")
+    public ResponseEntity<?> fetchComptaTypeCheckList() {
+        try {
+            List<Map<String, Object>> rows = comptaDataQualityService.fetchTypeCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "typeCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching COMPTA type-check list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 5a list for COMPTA:
+     * rows where idcontrat does not exist in stg_contrat_raw.
+     * GET /api/etl/quality/compta/contrat-relation-check/list
+     */
+    @GetMapping("/quality/compta/contrat-relation-check/list")
+    public ResponseEntity<?> fetchComptaContratRelationCheckList() {
+        try {
+            List<Map<String, Object>> rows = comptaDataQualityService.fetchContratRelationCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "contratRelationCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching COMPTA contrat-relation-check list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 5b list for COMPTA:
+     * rows where idtiers does not exist in stg_tiers_raw.
+     * GET /api/etl/quality/compta/tiers-relation-check/list
+     */
+    @GetMapping("/quality/compta/tiers-relation-check/list")
+    public ResponseEntity<?> fetchComptaTiersRelationCheckList() {
+        try {
+            List<Map<String, Object>> rows = comptaDataQualityService.fetchTiersRelationCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "tiersRelationCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching COMPTA tiers-relation-check list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
      * Execute transformations on stg_tiers_raw table.
      * POST /api/etl/transform/tiers
      */
