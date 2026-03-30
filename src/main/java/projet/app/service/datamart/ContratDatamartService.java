@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -54,6 +55,119 @@ public class ContratDatamartService {
 
         log.info("Contrat datamart load completed: {}", result);
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchContratList(int page, int size) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = size > 0 ? size : 20;
+        int offset = normalizedPage * normalizedSize;
+
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.dim_contrat", Long.class);
+        long totalElements = total == null ? 0L : total;
+
+        List<Map<String, Object>> items = jdbcTemplate.queryForList("""
+                SELECT
+                    c.id,
+                    c.id_client,
+                    c.ancienneteimpaye,
+                    c.tauxcontrat,
+                    c.actif,
+                    a.numagence,
+                    cl.nomprenom,
+                    dv.devise,
+                    ofi.libelle AS objetfinance,
+                    tc.typcontrat,
+                    douv.date_value AS dateouverture,
+                    dech.date_value AS dateecheance
+                FROM datamart.dim_contrat c
+                LEFT JOIN datamart.sub_dim_agence a ON a.id = c.id_agence
+                LEFT JOIN datamart.dim_client cl ON cl.idtiers = c.id_client
+                LEFT JOIN datamart.sub_dim_devise dv ON dv.id = c.id_devise
+                LEFT JOIN datamart.sub_dim_objetfinance ofi ON ofi.id = c.id_objetfinance
+                LEFT JOIN datamart.sub_dim_typcontrat tc ON tc.id = c.id_typcontrat
+                LEFT JOIN datamart.sub_dim_date douv ON douv.id = c.id_dateouverture
+                LEFT JOIN datamart.sub_dim_date dech ON dech.id = c.id_dateecheance
+                ORDER BY c.id
+                LIMIT ? OFFSET ?
+                """, normalizedSize, offset);
+
+        return buildPaginatedResponse(normalizedPage, normalizedSize, totalElements, items);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchAgenceList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_agence",
+                "SELECT id, numagence FROM datamart.sub_dim_agence ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchDeviseList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_devise",
+                "SELECT id, devise FROM datamart.sub_dim_devise ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchObjetFinanceList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_objetfinance",
+                "SELECT id, libelle FROM datamart.sub_dim_objetfinance ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchTypeContratList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_typcontrat",
+                "SELECT id, typcontrat FROM datamart.sub_dim_typcontrat ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchDateList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_date",
+                "SELECT id, date_value FROM datamart.sub_dim_date ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    private Map<String, Object> fetchSimpleList(String tableName, String selectSql, int page, int size) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = size > 0 ? size : 20;
+        int offset = normalizedPage * normalizedSize;
+
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
+        long totalElements = total == null ? 0L : total;
+
+        List<Map<String, Object>> items = jdbcTemplate.queryForList(selectSql, normalizedSize, offset);
+        return buildPaginatedResponse(normalizedPage, normalizedSize, totalElements, items);
+    }
+
+    private Map<String, Object> buildPaginatedResponse(int page, int size, long totalElements, List<Map<String, Object>> items) {
+        long totalPages = size == 0 ? 0 : (long) Math.ceil((double) totalElements / size);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", totalPages);
+        response.put("items", items);
+
+        return response;
     }
 
     private void ensureDatamartTablesExist() {

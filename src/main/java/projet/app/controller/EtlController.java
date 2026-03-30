@@ -487,6 +487,120 @@ public class EtlController {
     }
 
     /**
+     * Fetch paginated DIM CLIENT list with joins on TIERS dimensions.
+     * GET /api/etl/datamart/tiers/client/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/client/list")
+    public ResponseEntity<?> fetchClientDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchClientList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart dim_client list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM RESIDENCE list.
+     * GET /api/etl/datamart/tiers/residence/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/residence/list")
+    public ResponseEntity<?> fetchResidenceDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchResidenceList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_residence list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM AGENTECO list.
+     * GET /api/etl/datamart/tiers/agenteco/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/agenteco/list")
+    public ResponseEntity<?> fetchAgentecoDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchAgentecoList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_agenteco list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM DOUTEUX list.
+     * GET /api/etl/datamart/tiers/douteux/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/douteux/list")
+    public ResponseEntity<?> fetchDouteuxDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchDouteuxList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_douteux list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM GRP AFFAIRE list.
+     * GET /api/etl/datamart/tiers/grpaffaire/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/grpaffaire/list")
+    public ResponseEntity<?> fetchGrpAffaireDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchGrpAffaireList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_grpaffaire list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM SECTION ACTIVITE list.
+     * GET /api/etl/datamart/tiers/sectionactivite/list?page=0&size=20
+     */
+    @GetMapping("/datamart/tiers/sectionactivite/list")
+    public ResponseEntity<?> fetchSectionActiviteDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(tiersDatamartService.fetchSectionActiviteList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_sectionactivite list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
      * Load CONTRAT datamart dimensions from staging.stg_contrat_raw.
      * POST /api/etl/datamart/contrat
      */
@@ -517,6 +631,120 @@ public class EtlController {
     }
 
     /**
+     * Fetch paginated DIM CONTRAT list with joins on CONTRAT dimensions and client.
+     * GET /api/etl/datamart/contrat/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/list")
+    public ResponseEntity<?> fetchContratDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchContratList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart dim_contrat list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM AGENCE list.
+     * GET /api/etl/datamart/contrat/agence/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/agence/list")
+    public ResponseEntity<?> fetchAgenceDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchAgenceList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_agence list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM DEVISE list.
+     * GET /api/etl/datamart/contrat/devise/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/devise/list")
+    public ResponseEntity<?> fetchDeviseDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchDeviseList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_devise list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM OBJET FINANCE list.
+     * GET /api/etl/datamart/contrat/objetfinance/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/objetfinance/list")
+    public ResponseEntity<?> fetchObjetFinanceDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchObjetFinanceList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_objetfinance list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM TYPE CONTRAT list.
+     * GET /api/etl/datamart/contrat/typecontrat/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/typecontrat/list")
+    public ResponseEntity<?> fetchTypeContratDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchTypeContratList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_typcontrat list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM DATE list.
+     * GET /api/etl/datamart/contrat/date/list?page=0&size=20
+     */
+    @GetMapping("/datamart/contrat/date/list")
+    public ResponseEntity<?> fetchDateDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(contratDatamartService.fetchDateList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_date list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
      * Load COMPTA datamart fact and dimensions from staging.stg_compta_raw.
      * POST /api/etl/datamart/compta
      */
@@ -539,6 +767,63 @@ public class EtlController {
 
         } catch (Exception e) {
             log.error("Error during COMPTA datamart load: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated FACT BALANCE list with joins on COMPTA dimensions.
+     * GET /api/etl/datamart/compta/balance/list?page=0&size=20
+     */
+    @GetMapping("/datamart/compta/balance/list")
+    public ResponseEntity<?> fetchBalanceDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(comptaDatamartService.fetchBalanceList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart fact_balance list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM COMPTE list.
+     * GET /api/etl/datamart/compta/compte/list?page=0&size=20
+     */
+    @GetMapping("/datamart/compta/compte/list")
+    public ResponseEntity<?> fetchCompteDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(comptaDatamartService.fetchCompteList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_compte list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch paginated SUB DIM CHAPITRE list.
+     * GET /api/etl/datamart/compta/chapitre/list?page=0&size=20
+     */
+    @GetMapping("/datamart/compta/chapitre/list")
+    public ResponseEntity<?> fetchChapitreDatamartList(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(comptaDatamartService.fetchChapitreList(page, size));
+        } catch (Exception e) {
+            log.error("Error fetching datamart sub_dim_chapitre list: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()

@@ -7,6 +7,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Builds COMPTA datamart fact table and dimensions from staging.stg_compta_raw.
  */
@@ -38,6 +42,92 @@ public class ComptaDatamartService {
 
         log.info("Compta datamart load completed: {}", result);
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchBalanceList(int page, int size) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = size > 0 ? size : 20;
+        int offset = normalizedPage * normalizedSize;
+
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.fact_balance", Long.class);
+        long totalElements = total == null ? 0L : total;
+
+        List<Map<String, Object>> items = jdbcTemplate.queryForList("""
+                SELECT
+                    b.id,
+                    b.id_client,
+                    b.id_contrat,
+                    b.soldeorigine,
+                    b.soldeconvertie,
+                    b.cumulmvtdb,
+                    b.cumulmvtcr,
+                    b.soldeinitdebmois,
+                    b.amount,
+                    b.actif,
+                    a.numagence,
+                    d.devise,
+                    db.devise AS devisebanque,
+                    c.libellecompte,
+                    ch.chapitre,
+                    dt.date_value AS datevalue
+                FROM datamart.fact_balance b
+                LEFT JOIN datamart.sub_dim_agence a ON a.id = b.id_agence
+                LEFT JOIN datamart.sub_dim_devise d ON d.id = b.id_devise
+                LEFT JOIN datamart.sub_dim_devise db ON db.id = b.id_devisebnq
+                LEFT JOIN datamart.sub_dim_compte c ON c.id = b.id_compte
+                LEFT JOIN datamart.sub_dim_chapitre ch ON ch.id = b.id_chapitre
+                LEFT JOIN datamart.sub_dim_date dt ON dt.id = b.id_date
+                ORDER BY b.id
+                LIMIT ? OFFSET ?
+                """, normalizedSize, offset);
+
+        return buildPaginatedResponse(normalizedPage, normalizedSize, totalElements, items);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchCompteList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_compte",
+                "SELECT id, numcompte, libellecompte FROM datamart.sub_dim_compte ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchChapitreList(int page, int size) {
+        return fetchSimpleList(
+                "datamart.sub_dim_chapitre",
+                "SELECT id, chapitre FROM datamart.sub_dim_chapitre ORDER BY id LIMIT ? OFFSET ?",
+                page,
+                size
+        );
+    }
+
+    private Map<String, Object> fetchSimpleList(String tableName, String selectSql, int page, int size) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = size > 0 ? size : 20;
+        int offset = normalizedPage * normalizedSize;
+
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
+        long totalElements = total == null ? 0L : total;
+
+        List<Map<String, Object>> items = jdbcTemplate.queryForList(selectSql, normalizedSize, offset);
+        return buildPaginatedResponse(normalizedPage, normalizedSize, totalElements, items);
+    }
+
+    private Map<String, Object> buildPaginatedResponse(int page, int size, long totalElements, List<Map<String, Object>> items) {
+        long totalPages = size == 0 ? 0 : (long) Math.ceil((double) totalElements / size);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", totalPages);
+        response.put("items", items);
+
+        return response;
     }
 
     private void ensureDatamartTablesExist() {
