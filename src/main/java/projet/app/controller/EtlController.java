@@ -1,11 +1,15 @@
 package projet.app.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import projet.app.dto.DbConnectionRequest;
+import projet.app.dto.LoadFromDbResponse;
+import projet.app.dto.LoadRequest;
 import projet.app.service.datamart.ComptaDatamartService;
 import projet.app.service.datamart.ContratDatamartService;
 import projet.app.service.datamart.TiersDatamartService;
@@ -48,6 +52,43 @@ public class EtlController {
     private final ContratDatamartService contratDatamartService;
     private final ComptaDatamartService comptaDatamartService;
 
+    @PostMapping("/columns")
+    public ResponseEntity<?> getSourceColumns(@Valid @RequestBody DbConnectionRequest request) {
+        try {
+            return ResponseEntity.ok(etlService.getSourceColumns(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching source columns: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", "Failed to fetch source columns"
+            ));
+        }
+    }
+
+    @PostMapping("/load-from-db")
+    public ResponseEntity<?> loadFromDatabase(@Valid @RequestBody LoadRequest request) {
+        try {
+            LoadFromDbResponse response = etlService.loadFromDatabase(request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("Error loading data from dynamic source: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", "Failed to load data from source database"
+            ));
+        }
+    }
+
     /**
      * Process a file via multipart form upload.
      * POST /api/etl/process
@@ -84,7 +125,8 @@ public class EtlController {
             }
         }
 
-        String fileName = file.getOriginalFilename().toLowerCase();
+        String originalFileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String fileName = originalFileName.toLowerCase();
         boolean isSqlFile = fileName.endsWith(".sql");
         boolean isExcelFile = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
         boolean isJsonFile = fileName.endsWith(".json");
@@ -171,7 +213,7 @@ public class EtlController {
         try {
             // Save uploaded file to temp location
             Path tempDir = Files.createTempDirectory("etl-upload");
-            Path tempFile = tempDir.resolve(file.getOriginalFilename());
+            Path tempFile = tempDir.resolve(originalFileName.isBlank() ? "upload.tmp" : originalFileName);
             Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
 
             String typeToUse = fileType != null ? fileType.toUpperCase() : "SQL";
@@ -183,7 +225,7 @@ public class EtlController {
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
                     "rowCount", rowCount,
-                    "file", file.getOriginalFilename(),
+                    "file", originalFileName,
                     "format", format,
                     "mappingUsed", columnMapping.isEmpty() ? "auto" : "explicit+auto",
                     "mappedColumns", resolvedMapping != null ? resolvedMapping : Map.of()

@@ -25,6 +25,13 @@ public class ColumnMappingService {
                     "idcontrat", "amount", "actif", "date_bal")
     );
 
+        public List<String> getSchemaColumns(String type) {
+                if (type == null) {
+                        return List.of();
+                }
+                return SCHEMAS.getOrDefault(type.toUpperCase(), List.of());
+        }
+
     /**
      * Resolve the effective column mapping for a given row.
      * <p>
