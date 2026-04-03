@@ -6,10 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import projet.app.dto.DbConnectionRequest;
+import projet.app.dto.LoadFromDbRequest;
 import projet.app.dto.LoadFromDbResponse;
-import projet.app.dto.LoadRequest;
 import projet.app.service.datamart.ComptaDatamartService;
 import projet.app.service.datamart.ContratDatamartService;
 import projet.app.service.datamart.TiersDatamartService;
@@ -20,18 +18,9 @@ import projet.app.service.quality.TiersDataQualityService;
 import projet.app.service.transform.contrat.ContratTransformService;
 import projet.app.service.transform.tiers.TiersTransformService;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Simple REST API for ETL extraction.
@@ -52,26 +41,12 @@ public class EtlController {
     private final ContratDatamartService contratDatamartService;
     private final ComptaDatamartService comptaDatamartService;
 
-    @PostMapping("/columns")
-    public ResponseEntity<?> getSourceColumns(@Valid @RequestBody DbConnectionRequest request) {
-        try {
-            return ResponseEntity.ok(etlService.getSourceColumns(request));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "status", "ERROR",
-                    "message", e.getMessage()
-            ));
-        } catch (Exception e) {
-            log.error("Error fetching source columns: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "status", "ERROR",
-                    "message", "Failed to fetch source columns"
-            ));
-        }
-    }
-
+    /**
+     * Load TIERS, CONTRAT and COMPTA staging tables in one call.
+     * Mapping is resolved from staging.mapping_config by configGroupNumber.
+     */
     @PostMapping("/load-from-db")
-    public ResponseEntity<?> loadFromDatabase(@Valid @RequestBody LoadRequest request) {
+    public ResponseEntity<?> loadFromDatabase(@Valid @RequestBody LoadFromDbRequest request) {
         try {
             LoadFromDbResponse response = etlService.loadFromDatabase(request);
             return ResponseEntity.ok(response);
@@ -90,149 +65,122 @@ public class EtlController {
     }
 
     /**
-     * Process a file via multipart form upload.
-     * POST /api/etl/process
-     * Form data: file (Excel or SQL file), type (TIERS, CONTRAT, or COMPTA - required for Excel, ignored for SQL)
+     * Execute quality + transform pipeline in strict order:
+     * 1. TIERS quality, then TIERS transform
+     * 2. CONTRAT quality, then CONTRAT transform
+     * 3. COMPTA quality
      */
-    @PostMapping("/process")
-    public ResponseEntity<?> processFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "type", required = false) String fileType,
-            @RequestParam(value = "date_bal", required = false) String dateBal,
-            @RequestParam(value = "mapping", required = false) String mappingJson) {
-        
-        log.info("Processing uploaded file: {}, type: {}, date_bal: {}", file.getOriginalFilename(), fileType, dateBal);
+    @PostMapping("/quality_transform")
+    public ResponseEntity<?> runQualityTransformPipeline() {
+        log.info("Starting merged quality/transform pipeline");
 
-        Map<String, String> columnMapping = new HashMap<>(); // key = fileColumn, value = dbColumn
-
-        if (mappingJson != null && !mappingJson.isBlank()) {
-            try {
-                ObjectMapper mapper = new ObjectMapper();
-                List<Map<String, String>> mappingList = mapper.readValue(
-                    mappingJson,
-                    new TypeReference<List<Map<String, String>>>() {}
-                );
-                // Flatten list of single-entry maps into one map
-                for (Map<String, String> entry : mappingList) {
-                    columnMapping.putAll(entry);
-                }
-                log.info("Received column mapping: {}", columnMapping);
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "status", "ERROR",
-                    "message", "Invalid mapping JSON format. Expected: [{\"fileColumn\":\"dbColumn\"},...] - " + e.getMessage()
-                ));
-            }
-        }
-
-        String originalFileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
-        String fileName = originalFileName.toLowerCase();
-        boolean isSqlFile = fileName.endsWith(".sql");
-        boolean isExcelFile = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
-        boolean isJsonFile = fileName.endsWith(".json");
-
-        // Validate file type
-        if (!isSqlFile && !isExcelFile && !isJsonFile) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "status", "ERROR",
-                    "message", "Invalid file format. Must be .xlsx, .xls, .sql, or .json"
-            ));
-        }
-
-        // Type validation:
-        // - SQL files: type is optional (will be auto-detected from table name in INSERT statements)
-        // - Excel/JSON files: type is required (TIERS, CONTRAT, or COMPTA)
-        if (isExcelFile || isJsonFile) {
-            if (fileType == null || fileType.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "status", "ERROR",
-                        "message", "Type parameter is required for Excel/JSON files. Must be TIERS, CONTRAT, or COMPTA"
-                ));
-            }
-            String upperType = fileType.toUpperCase();
-            if (!upperType.equals("TIERS") && !upperType.equals("CONTRAT") && !upperType.equals("COMPTA")) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "status", "ERROR",
-                        "message", "Invalid type. Must be TIERS, CONTRAT, or COMPTA"
-                ));
-            }
-            // For COMPTA, date_bal is required and must be dd/MM/yyyy
-            if (upperType.equals("COMPTA")) {
-                if (dateBal == null || dateBal.isBlank()) {
-                    return ResponseEntity.badRequest().body(Map.of(
-                            "status", "ERROR",
-                            "message", "date_bal parameter is required for COMPTA files. Format: dd/MM/yyyy"
-                    ));
-                }
-                try {
-                    LocalDate.parse(dateBal, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                } catch (DateTimeParseException e) {
-                    return ResponseEntity.badRequest().body(Map.of(
-                            "status", "ERROR",
-                            "message", "Invalid date_bal format. Must be dd/MM/yyyy"
-                    ));
-                }
-            }
-        }
-        
-        // For SQL files with explicit type, validate it
-        if (isSqlFile && fileType != null && !fileType.isBlank()) {
-            String upperType = fileType.toUpperCase();
-            if (!upperType.equals("TIERS") && !upperType.equals("CONTRAT") && !upperType.equals("COMPTA")) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "status", "ERROR",
-                        "message", "Invalid type. Must be TIERS, CONTRAT, or COMPTA"
-                ));
-            }
-            // For COMPTA, date_bal is required and must be dd/MM/yyyy
-            if (upperType.equals("COMPTA")) {
-                if (dateBal == null || dateBal.isBlank()) {
-                    return ResponseEntity.badRequest().body(Map.of(
-                            "status", "ERROR",
-                            "message", "date_bal parameter is required for COMPTA files. Format: dd/MM/yyyy"
-                    ));
-                }
-                try {
-                    LocalDate.parse(dateBal, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                } catch (DateTimeParseException e) {
-                    return ResponseEntity.badRequest().body(Map.of(
-                            "status", "ERROR",
-                            "message", "Invalid date_bal format. Must be dd/MM/yyyy"
-                    ));
-                }
-            }
-        }
-
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "status", "ERROR",
-                    "message", "File is empty"
-            ));
-        }
+        long pipelineStart = System.currentTimeMillis();
+        Map<String, Object> tableResults = new LinkedHashMap<>();
+        String lastCompletedStep = "none";
 
         try {
-            // Save uploaded file to temp location
-            Path tempDir = Files.createTempDirectory("etl-upload");
-            Path tempFile = tempDir.resolve(originalFileName.isBlank() ? "upload.tmp" : originalFileName);
-            Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+            // TIERS pipeline
+            long tiersStart = System.currentTimeMillis();
+            TiersDataQualityService.DataQualityResult tiersQuality = tiersDataQualityService.cleanStagingTable();
+            lastCompletedStep = "TIERS.quality";
 
-            String typeToUse = fileType != null ? fileType.toUpperCase() : "SQL";
-            projet.app.service.EtlService.ProcessResult processResult = etlService.processFile(tempFile, typeToUse, dateBal, columnMapping);
-            int rowCount = processResult.getRowCount();
-            Map<String, String> resolvedMapping = processResult.getResolvedMapping();
+            int tiersTransformed = tiersTransformService.transformStagingTable();
+            lastCompletedStep = "TIERS.transform";
 
-            String format = isSqlFile ? "SQL" : (isJsonFile ? "JSON" : "EXCEL");
+            Map<String, Object> tiersResult = new LinkedHashMap<>();
+            tiersResult.put("quality", Map.of(
+                "nullCheckDeleted", tiersQuality.getNullCheckDeletedCount(),
+                "duplicateDeleted", tiersQuality.getDuplicateDeletedCount(),
+                "typeCheckDeleted", tiersQuality.getTypeCheckDeletedCount(),
+                "totalDeleted", tiersQuality.getTotalDeletedCount()
+            ));
+            tiersResult.put("transform", Map.of(
+                "rowsTransformed", tiersTransformed
+            ));
+            tiersResult.put("durationMs", System.currentTimeMillis() - tiersStart);
+            tableResults.put("TIERS", tiersResult);
+
+            // CONTRAT pipeline
+            long contratStart = System.currentTimeMillis();
+            ContratDataQualityService.DataQualityResult contratQuality = contratDataQualityService.cleanStagingTable();
+            lastCompletedStep = "CONTRAT.quality";
+
+            int contratTransformed = contratTransformService.transformStagingTable();
+            lastCompletedStep = "CONTRAT.transform";
+
+            Map<String, Object> contratResult = new LinkedHashMap<>();
+            contratResult.put("quality", Map.of(
+                "nullCheckDeleted", contratQuality.getNullCheckDeletedCount(),
+                "duplicateDeleted", contratQuality.getDuplicateDeletedCount(),
+                "typeCheckDeleted", contratQuality.getTypeCheckDeletedCount(),
+                "totalDeleted", contratQuality.getTotalDeletedCount()
+            ));
+            contratResult.put("transform", Map.of(
+                "rowsTransformed", contratTransformed
+            ));
+            contratResult.put("durationMs", System.currentTimeMillis() - contratStart);
+            tableResults.put("CONTRAT", contratResult);
+
+            // COMPTA pipeline
+            long comptaStart = System.currentTimeMillis();
+            ComptaDataQualityService.DataQualityResult comptaQuality = comptaDataQualityService.cleanStagingTable();
+            lastCompletedStep = "COMPTA.quality";
+
+            Map<String, Object> comptaResult = new LinkedHashMap<>();
+            comptaResult.put("quality", Map.of(
+                "nullCheckCount", comptaQuality.getNullCheckCount(),
+                "duplicateCount", comptaQuality.getDuplicateCount(),
+                "typeCheckCount", comptaQuality.getTypeCheckCount(),
+                "balanceSum", comptaQuality.getBalanceSum(),
+                "contratRelationCheck", comptaQuality.getContratRelationCheck(),
+                "tiersRelationCheck", comptaQuality.getTiersRelationCheck(),
+                "totalIssues", comptaQuality.getTotalIssues()
+            ));
+            comptaResult.put("durationMs", System.currentTimeMillis() - comptaStart);
+            tableResults.put("COMPTA", comptaResult);
+
             return ResponseEntity.ok(Map.of(
-                    "status", "COMPLETED",
-                    "rowCount", rowCount,
-                    "file", originalFileName,
-                    "format", format,
-                    "mappingUsed", columnMapping.isEmpty() ? "auto" : "explicit+auto",
-                    "mappedColumns", resolvedMapping != null ? resolvedMapping : Map.of()
+                "status", "COMPLETED",
+                "sequence", List.of(
+                    "TIERS.quality",
+                    "TIERS.transform",
+                    "CONTRAT.quality",
+                    "CONTRAT.transform",
+                    "COMPTA.quality"
+                ),
+                "totalDurationMs", System.currentTimeMillis() - pipelineStart,
+                "tables", tableResults
             ));
 
         } catch (Exception e) {
-            log.error("Error processing file: {}", e.getMessage(), e);
+            log.error("Error during merged quality/transform pipeline after step {}: {}", lastCompletedStep, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "status", "ERROR",
+                "lastCompletedStep", lastCompletedStep,
+                "totalDurationMs", System.currentTimeMillis() - pipelineStart,
+                "tables", tableResults,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 1 list for TIERS:
+     * rows where required columns are NULL.
+     * GET /api/etl/quality/tiers/null-check/list
+     */
+    @GetMapping("/quality/tiers/null-check/list")
+    public ResponseEntity<?> fetchTiersNullCheckList() {
+        try {
+            List<Map<String, Object>> rows = tiersDataQualityService.fetchNullCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "nullCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching TIERS null-check list: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()
@@ -241,26 +189,22 @@ public class EtlController {
     }
 
     /**
-     * Execute data quality checks and cleaning on stg_tiers_raw table.
-     * POST /api/etl/quality/tiers
+     * Fetch Rule 2 list for TIERS:
+     * duplicate rows by idtiers (keeping first occurrence).
+     * GET /api/etl/quality/tiers/duplicate/list
      */
-    @PostMapping("/quality/tiers")
-    public ResponseEntity<?> cleanTiersStaging() {
-        log.info("Starting data quality checks on stg_tiers_raw");
-        
+    @GetMapping("/quality/tiers/duplicate/list")
+    public ResponseEntity<?> fetchTiersDuplicateList() {
         try {
-            TiersDataQualityService.DataQualityResult result = tiersDataQualityService.cleanStagingTable();
-            
+            List<Map<String, Object>> rows = tiersDataQualityService.fetchDuplicateList();
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
-                    "nullCheckDeleted", result.getNullCheckDeletedCount(),
-                    "duplicateDeleted", result.getDuplicateDeletedCount(),
-                    "typeCheckDeleted", result.getTypeCheckDeletedCount(),
-                    "totalDeleted", result.getTotalDeletedCount()
+                    "rule", "duplicate",
+                    "count", rows.size(),
+                    "rows", rows
             ));
-            
         } catch (Exception e) {
-            log.error("Error during data quality checks: {}", e.getMessage(), e);
+            log.error("Error fetching TIERS duplicate list: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()
@@ -269,26 +213,22 @@ public class EtlController {
     }
 
     /**
-     * Execute data quality checks and cleaning on stg_contrat_raw table.
-     * POST /api/etl/quality/contrat
+     * Fetch Rule 3 list for TIERS:
+     * rows with invalid data types.
+     * GET /api/etl/quality/tiers/type-check/list
      */
-    @PostMapping("/quality/contrat")
-    public ResponseEntity<?> cleanContratStaging() {
-        log.info("Starting data quality checks on stg_contrat_raw");
-
+    @GetMapping("/quality/tiers/type-check/list")
+    public ResponseEntity<?> fetchTiersTypeCheckList() {
         try {
-            ContratDataQualityService.DataQualityResult result = contratDataQualityService.cleanStagingTable();
-
+            List<Map<String, Object>> rows = tiersDataQualityService.fetchTypeCheckList();
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
-                    "nullCheckDeleted", result.getNullCheckDeletedCount(),
-                    "duplicateDeleted", result.getDuplicateDeletedCount(),
-                    "typeCheckDeleted", result.getTypeCheckDeletedCount(),
-                    "totalDeleted", result.getTotalDeletedCount()
+                    "rule", "typeCheck",
+                    "count", rows.size(),
+                    "rows", rows
             ));
-
         } catch (Exception e) {
-            log.error("Error during contrat data quality checks: {}", e.getMessage(), e);
+            log.error("Error fetching TIERS type-check list: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()
@@ -297,30 +237,70 @@ public class EtlController {
     }
 
     /**
-     * Execute data quality checks on stg_compta_raw table.
-     * Counts issues without deleting rows.
-     * POST /api/etl/quality/compta
+     * Fetch Rule 1 list for CONTRAT:
+     * rows where required columns are NULL.
+     * GET /api/etl/quality/contrat/null-check/list
      */
-    @PostMapping("/quality/compta")
-    public ResponseEntity<?> checkComptaStaging() {
-        log.info("Starting data quality checks on stg_compta_raw");
-
+    @GetMapping("/quality/contrat/null-check/list")
+    public ResponseEntity<?> fetchContratNullCheckList() {
         try {
-            ComptaDataQualityService.DataQualityResult result = comptaDataQualityService.cleanStagingTable();
-
+            List<Map<String, Object>> rows = contratDataQualityService.fetchNullCheckList();
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
-                    "nullCheckCount", result.getNullCheckCount(),
-                    "duplicateCount", result.getDuplicateCount(),
-                    "typeCheckCount", result.getTypeCheckCount(),
-                    "balanceSum", result.getBalanceSum(),
-                    "contratRelationCheck", result.getContratRelationCheck(),
-                    "tiersRelationCheck", result.getTiersRelationCheck(),
-                    "totalIssues", result.getTotalIssues()
+                    "rule", "nullCheck",
+                    "count", rows.size(),
+                    "rows", rows
             ));
-
         } catch (Exception e) {
-            log.error("Error during compta data quality checks: {}", e.getMessage(), e);
+            log.error("Error fetching CONTRAT null-check list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 2 list for CONTRAT:
+     * duplicate rows by idcontrat (keeping first occurrence).
+     * GET /api/etl/quality/contrat/duplicate/list
+     */
+    @GetMapping("/quality/contrat/duplicate/list")
+    public ResponseEntity<?> fetchContratDuplicateList() {
+        try {
+            List<Map<String, Object>> rows = contratDataQualityService.fetchDuplicateList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "duplicate",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching CONTRAT duplicate list: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Fetch Rule 3 list for CONTRAT:
+     * rows with invalid data types.
+     * GET /api/etl/quality/contrat/type-check/list
+     */
+    @GetMapping("/quality/contrat/type-check/list")
+    public ResponseEntity<?> fetchContratTypeCheckList() {
+        try {
+            List<Map<String, Object>> rows = contratDataQualityService.fetchTypeCheckList();
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "rule", "typeCheck",
+                    "count", rows.size(),
+                    "rows", rows
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching CONTRAT type-check list: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()
@@ -449,23 +429,18 @@ public class EtlController {
     }
 
     /**
-     * Execute transformations on stg_tiers_raw table.
-     * POST /api/etl/transform/tiers
+     * Calculate and compare soldeconvertie sums between staging and fact_balance.
+     * GET /api/etl/quality/compta/balance-sum
      */
-    @PostMapping("/transform/tiers")
-    public ResponseEntity<?> transformTiersStaging() {
-        log.info("Starting transformation of stg_tiers_raw");
-
+    @GetMapping("/quality/compta/balance-sum")
+    public ResponseEntity<?> fetchComptaBalanceSums() {
         try {
-            int count = tiersTransformService.transformStagingTable();
-
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
-                    "rowsTransformed", count
+                    "sums", comptaDataQualityService.calculateBalanceSumsFromStagingAndFact()
             ));
-
         } catch (Exception e) {
-            log.error("Error during transformation: {}", e.getMessage(), e);
+            log.error("Error calculating COMPTA balance sums: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()
@@ -474,55 +449,81 @@ public class EtlController {
     }
 
     /**
-     * Execute transformations on stg_contrat_raw table.
-     * POST /api/etl/transform/contrat
+     * Execute datamart load pipeline in strict order:
+     * 1. TIERS datamart load
+     * 2. CONTRAT datamart load
+     * 3. COMPTA datamart load
+     * POST /api/etl/datamart
      */
-    @PostMapping("/transform/contrat")
-    public ResponseEntity<?> transformContratStaging() {
-        log.info("Starting transformation of stg_contrat_raw");
+    @PostMapping("/datamart")
+    public ResponseEntity<?> loadDatamartPipeline() {
+        log.info("Starting merged datamart load pipeline");
+
+        long pipelineStart = System.currentTimeMillis();
+        Map<String, Object> tableResults = new LinkedHashMap<>();
+        String lastCompletedStep = "none";
 
         try {
-            int count = contratTransformService.transformStagingTable();
+            long tiersStart = System.currentTimeMillis();
+            TiersDatamartService.LoadResult tiersLoad = tiersDatamartService.loadTiersDatamart();
+            lastCompletedStep = "TIERS.datamart";
+
+            Map<String, Object> tiersResult = new LinkedHashMap<>();
+            tiersResult.put("subDimResidenceRows", tiersLoad.getSubDimResidenceRows());
+            tiersResult.put("subDimAgentecoRows", tiersLoad.getSubDimAgentecoRows());
+            tiersResult.put("subDimDouteuxRows", tiersLoad.getSubDimDouteuxRows());
+            tiersResult.put("subDimGrpaffaireRows", tiersLoad.getSubDimGrpaffaireRows());
+            tiersResult.put("subDimSectionactiviteRows", tiersLoad.getSubDimSectionactiviteRows());
+            tiersResult.put("dimClientRows", tiersLoad.getDimClientRows());
+            tiersResult.put("durationMs", System.currentTimeMillis() - tiersStart);
+            tableResults.put("TIERS", tiersResult);
+
+            long contratStart = System.currentTimeMillis();
+            ContratDatamartService.LoadResult contratLoad = contratDatamartService.loadContratDatamart();
+            lastCompletedStep = "CONTRAT.datamart";
+
+            Map<String, Object> contratResult = new LinkedHashMap<>();
+            contratResult.put("subDimAgenceRows", contratLoad.getSubDimAgenceRows());
+            contratResult.put("subDimDeviseRows", contratLoad.getSubDimDeviseRows());
+            contratResult.put("subDimObjetfinanceRows", contratLoad.getSubDimObjetfinanceRows());
+            contratResult.put("subDimTypcontratRows", contratLoad.getSubDimTypcontratRows());
+            contratResult.put("subDimDateRows", contratLoad.getSubDimDateRows());
+            contratResult.put("dimContratRows", contratLoad.getDimContratRows());
+            contratResult.put("durationMs", System.currentTimeMillis() - contratStart);
+            tableResults.put("CONTRAT", contratResult);
+
+            long comptaStart = System.currentTimeMillis();
+            ComptaDatamartService.LoadResult comptaLoad = comptaDatamartService.loadComptaDatamart();
+            lastCompletedStep = "COMPTA.datamart";
+
+            Map<String, Object> comptaResult = new LinkedHashMap<>();
+            comptaResult.put("subDimAgenceRows", comptaLoad.getSubDimAgenceRows());
+            comptaResult.put("subDimDeviseRows", comptaLoad.getSubDimDeviseRows());
+            comptaResult.put("subDimChapitreRows", comptaLoad.getSubDimChapitreRows());
+            comptaResult.put("subDimCompteRows", comptaLoad.getSubDimCompteRows());
+            comptaResult.put("subDimDateRows", comptaLoad.getSubDimDateRows());
+            comptaResult.put("factBalanceRows", comptaLoad.getFactBalanceRows());
+            comptaResult.put("durationMs", System.currentTimeMillis() - comptaStart);
+            tableResults.put("COMPTA", comptaResult);
 
             return ResponseEntity.ok(Map.of(
                     "status", "COMPLETED",
-                    "rowsTransformed", count
+                    "sequence", List.of(
+                            "TIERS.datamart",
+                            "CONTRAT.datamart",
+                            "COMPTA.datamart"
+                    ),
+                    "totalDurationMs", System.currentTimeMillis() - pipelineStart,
+                    "tables", tableResults
             ));
 
         } catch (Exception e) {
-            log.error("Error during contrat transformation: {}", e.getMessage(), e);
+            log.error("Error during merged datamart pipeline after step {}: {}", lastCompletedStep, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
-                    "message", e.getMessage()
-            ));
-        }
-    }
-
-    /**
-     * Load TIERS datamart dimensions from staging.stg_tiers_raw.
-     * POST /api/etl/datamart/tiers
-     */
-    @PostMapping("/datamart/tiers")
-    public ResponseEntity<?> loadTiersDatamart() {
-        log.info("Starting datamart load for TIERS");
-
-        try {
-            TiersDatamartService.LoadResult result = tiersDatamartService.loadTiersDatamart();
-
-            return ResponseEntity.ok(Map.of(
-                    "status", "COMPLETED",
-                    "subDimResidenceRows", result.getSubDimResidenceRows(),
-                    "subDimAgentecoRows", result.getSubDimAgentecoRows(),
-                    "subDimDouteuxRows", result.getSubDimDouteuxRows(),
-                    "subDimGrpaffaireRows", result.getSubDimGrpaffaireRows(),
-                    "subDimSectionactiviteRows", result.getSubDimSectionactiviteRows(),
-                    "dimClientRows", result.getDimClientRows()
-            ));
-
-        } catch (Exception e) {
-            log.error("Error during TIERS datamart load: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "status", "ERROR",
+                    "lastCompletedStep", lastCompletedStep,
+                    "totalDurationMs", System.currentTimeMillis() - pipelineStart,
+                    "tables", tableResults,
                     "message", e.getMessage()
             ));
         }
@@ -643,36 +644,6 @@ public class EtlController {
     }
 
     /**
-     * Load CONTRAT datamart dimensions from staging.stg_contrat_raw.
-     * POST /api/etl/datamart/contrat
-     */
-    @PostMapping("/datamart/contrat")
-    public ResponseEntity<?> loadContratDatamart() {
-        log.info("Starting datamart load for CONTRAT");
-
-        try {
-            ContratDatamartService.LoadResult result = contratDatamartService.loadContratDatamart();
-
-            return ResponseEntity.ok(Map.of(
-                    "status", "COMPLETED",
-                    "subDimAgenceRows", result.getSubDimAgenceRows(),
-                    "subDimDeviseRows", result.getSubDimDeviseRows(),
-                    "subDimObjetfinanceRows", result.getSubDimObjetfinanceRows(),
-                    "subDimTypcontratRows", result.getSubDimTypcontratRows(),
-                    "subDimDateRows", result.getSubDimDateRows(),
-                    "dimContratRows", result.getDimContratRows()
-            ));
-
-        } catch (Exception e) {
-            log.error("Error during CONTRAT datamart load: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "status", "ERROR",
-                    "message", e.getMessage()
-            ));
-        }
-    }
-
-    /**
      * Fetch paginated DIM CONTRAT list with joins on CONTRAT dimensions and client.
      * GET /api/etl/datamart/contrat/list?page=0&size=20
      */
@@ -779,36 +750,6 @@ public class EtlController {
             return ResponseEntity.ok(contratDatamartService.fetchDateList(page, size));
         } catch (Exception e) {
             log.error("Error fetching datamart sub_dim_date list: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "status", "ERROR",
-                    "message", e.getMessage()
-            ));
-        }
-    }
-
-    /**
-     * Load COMPTA datamart fact and dimensions from staging.stg_compta_raw.
-     * POST /api/etl/datamart/compta
-     */
-    @PostMapping("/datamart/compta")
-    public ResponseEntity<?> loadComptaDatamart() {
-        log.info("Starting datamart load for COMPTA");
-
-        try {
-            ComptaDatamartService.LoadResult result = comptaDatamartService.loadComptaDatamart();
-
-            return ResponseEntity.ok(Map.of(
-                    "status", "COMPLETED",
-                    "subDimAgenceRows", result.getSubDimAgenceRows(),
-                    "subDimDeviseRows", result.getSubDimDeviseRows(),
-                    "subDimChapitreRows", result.getSubDimChapitreRows(),
-                    "subDimCompteRows", result.getSubDimCompteRows(),
-                    "subDimDateRows", result.getSubDimDateRows(),
-                    "factBalanceRows", result.getFactBalanceRows()
-            ));
-
-        } catch (Exception e) {
-            log.error("Error during COMPTA datamart load: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()

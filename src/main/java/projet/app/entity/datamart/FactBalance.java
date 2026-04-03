@@ -11,6 +11,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "fact_balance", schema = "datamart")
 @Data
@@ -51,7 +53,7 @@ public class FactBalance {
     private Long soldeorigine;
 
     @Column(name = "soldeconvertie")
-    private Long soldeconvertie;
+    private BigDecimal soldeconvertie;
 
     @Column(name = "cumulmvtdb")
     private Long cumulmvtdb;

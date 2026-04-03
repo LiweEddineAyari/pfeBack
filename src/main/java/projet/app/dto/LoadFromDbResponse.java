@@ -10,8 +10,10 @@ import java.util.Map;
 public class LoadFromDbResponse {
     private String status;
     private int rowCount;
+    private Integer configGroupNumber;
     private String sourceTable;
     private String targetTable;
     private String mappingUsed;
     private Map<String, String> mappedColumns;
+    private Map<String, Map<String, Object>> tableResults;
 }

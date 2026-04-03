@@ -4,36 +4,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import projet.app.dto.ColumnMeta;
 import projet.app.dto.DbConnectionRequest;
-import projet.app.dto.ExcelRowDto;
 import projet.app.dto.IngestionType;
+import projet.app.dto.LoadFromDbRequest;
 import projet.app.dto.LoadFromDbResponse;
 import projet.app.dto.LoadRequest;
-import projet.app.entity.staging.StgComptaRaw;
-import projet.app.entity.staging.StgContratRaw;
-import projet.app.entity.staging.StgTiersRaw;
-import projet.app.repository.staging.StgComptaRawRepository;
-import projet.app.repository.staging.StgContratRawRepository;
-import projet.app.repository.staging.StgTiersRawRepository;
+import projet.app.entity.staging.MappingConfig;
 import projet.app.service.connector.ConnectorFactory;
 import projet.app.service.connector.DynamicConnectionFactory;
-import projet.app.service.excel.ExcelReaderService;
-import projet.app.service.json.JsonReaderService;
-import projet.app.service.mapping.ColumnMappingService;
-import projet.app.service.sql.SqlFileService;
-import projet.app.service.sql.SqlReaderService;
+import projet.app.service.mapping.MappingConfigService;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,376 +26,159 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Simple ETL service - reads Excel or SQL files and saves to PostgreSQL staging tables.
+ * ETL service for database-to-database ingestion driven by staging.mapping_config.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class EtlService {
 
-    private final ExcelReaderService excelReaderService;
-    private final JsonReaderService jsonReaderService;
-    private final SqlFileService sqlFileService;
-    private final SqlReaderService sqlReaderService;
-    private final ColumnMappingService columnMappingService;
     private final ConnectorFactory connectorFactory;
     private final DynamicConnectionFactory dynamicConnectionFactory;
+    private final MappingConfigService mappingConfigService;
     private final JdbcTemplate jdbcTemplate;
-    private final StgTiersRawRepository tiersRepository;
-    private final StgContratRawRepository contratRepository;
-    private final StgComptaRawRepository comptaRepository;
 
-    private static final int BATCH_SIZE = 100;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final Pattern TABLE_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)?$");
+    private static final Pattern COLUMN_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*$");
+
     private static final String TARGET_TIERS = "staging.stg_tiers_raw";
     private static final String TARGET_CONTRAT = "staging.stg_contrat_raw";
     private static final String TARGET_COMPTA = "staging.stg_compta_raw";
 
-    public static class ProcessResult {
-        private final int rowCount;
-        private final Map<String, String> resolvedMapping;
-
-        public ProcessResult(int rowCount, Map<String, String> resolvedMapping) {
-            this.rowCount = rowCount;
-            this.resolvedMapping = resolvedMapping;
-        }
-
-        public int getRowCount() {
-            return rowCount;
-        }
-
-        public Map<String, String> getResolvedMapping() {
-            return resolvedMapping;
-        }
-    }
-
-    public List<ColumnMeta> getSourceColumns(DbConnectionRequest request) {
-        validateConnectionRequest(request);
-        validateTableName(request.getTable(), "source table");
-        validateExternalConnection(request);
-        return connectorFactory.getConnector(request.getDbType()).getColumns(request);
-    }
-
-    public LoadFromDbResponse loadFromDatabase(LoadRequest request) {
+    public LoadFromDbResponse loadFromDatabase(LoadFromDbRequest request) {
         validateLoadRequest(request);
+        validateExternalConnection(request.getConnection());
         ensureStagingTablesExist();
 
-        String targetTable = resolveTargetTable(request.getType());
-        request.setTargetTable(targetTable);
+        List<MappingConfig> mappings = mappingConfigService.findByConfigGroupNumber(request.getConfigGroupNumber());
+        if (mappings.isEmpty()) {
+            throw new IllegalArgumentException("No mapping configuration found for configGroupNumber: " + request.getConfigGroupNumber());
+        }
 
-        List<ColumnMeta> sourceColumns = getSourceColumns(request.getConnection());
-        Map<String, String> effectiveMapping = resolveDbLoadMapping(request, sourceColumns);
-        request.setMapping(effectiveMapping);
+        Map<String, TableLoadPlan> plansByTarget = buildLoadPlans(mappings);
+        requireAllTargets(plansByTarget);
+        validateDateForComptaIfNeeded(request.getDateBal(), plansByTarget);
 
-        long beforeCount = countRows(targetTable);
+        int totalLoadedRows = 0;
+        Map<String, Map<String, Object>> tableResults = new LinkedHashMap<>();
 
-        connectorFactory.getConnector(request.getConnection().getDbType()).loadData(request);
+        for (String targetTable : List.of(TARGET_TIERS, TARGET_CONTRAT, TARGET_COMPTA)) {
+            TableLoadPlan plan = plansByTarget.get(targetTable);
 
-        long afterCount = countRows(targetTable);
-        int loadedRows = (int) Math.max(0L, afterCount - beforeCount);
+            LoadRequest connectorRequest = buildConnectorRequest(request, plan);
+            long beforeCount = countRows(plan.targetTable());
+
+            connectorFactory.getConnector(connectorRequest.getConnection().getDbType()).loadData(connectorRequest);
+
+            long afterCount = countRows(plan.targetTable());
+            int loadedRows = (int) Math.max(0L, afterCount - beforeCount);
+            totalLoadedRows += loadedRows;
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("sourceTable", plan.sourceTable());
+            result.put("targetTable", plan.targetTable());
+            result.put("rowCount", loadedRows);
+            result.put("mappedColumns", new LinkedHashMap<>(plan.columnMapping()));
+            tableResults.put(plan.type().name(), result);
+
+            log.info(
+                    "Load completed for {}: source={}, target={}, rows={}",
+                    plan.type(),
+                    plan.sourceTable(),
+                    plan.targetTable(),
+                    loadedRows
+            );
+        }
 
         return LoadFromDbResponse.builder()
                 .status("COMPLETED")
-                .rowCount(loadedRows)
-                .sourceTable(request.getConnection().getTable())
-                .targetTable(targetTable)
-            .mappingUsed(resolveMappingMode(request.getMapping(), effectiveMapping))
-            .mappedColumns(new LinkedHashMap<>(effectiveMapping))
+                .configGroupNumber(request.getConfigGroupNumber())
+                .rowCount(totalLoadedRows)
+                .sourceTable("MULTI")
+                .targetTable("MULTI")
+                .mappingUsed("mapping_config")
+                .mappedColumns(Map.of())
+                .tableResults(tableResults)
                 .build();
     }
 
-    /**
-     * Process a file (Excel, JSON, or SQL) and save to staging table.
-     * SQL files are now parsed into rows and go through column mapping like other formats.
-     */
-    @Transactional
-    public ProcessResult processFile(Path filePath, String fileType, String dateBal, Map<String, String> columnMapping) {
-        ensureStagingTablesExist();
-        log.info("Processing file: {}, type: {}, date_bal: {}", filePath, fileType, dateBal);
-        
-        String fileName = filePath.getFileName().toString().toLowerCase();
-        String batchId = java.util.UUID.randomUUID().toString();
-        List<ExcelRowDto> rows;
-        String resolvedFileType = fileType;
-        
-        // ── STEP 1: Read file into rows ──────────────────
-        if (fileName.endsWith(".sql")) {
-            // NEW: parse SQL into rows for mapping support
-            try {
-                rows = sqlReaderService.readSqlFile(filePath, batchId);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to parse SQL file: " + filePath, e);
-            }
-            
-            if (rows.isEmpty()) {
-                log.warn("SQL parser yielded 0 rows. Falling back to direct SQL execution (no mapping).");
-                return new ProcessResult(sqlFileService.executeSqlFile(filePath), Map.of());
-            }
-            
-            // For SQL, auto-detect type from table name if not provided or if "SQL" is passed
-            if (resolvedFileType == null || resolvedFileType.isBlank() || "SQL".equalsIgnoreCase(resolvedFileType)) {
-                try {
-                    resolvedFileType = detectTypeFromSql(filePath);
-                    log.info("Auto-detected type from SQL: {}", resolvedFileType);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to detect type from SQL file: " + filePath, e);
+    private Map<String, TableLoadPlan> buildLoadPlans(List<MappingConfig> mappings) {
+        Map<String, List<MappingConfig>> groupedByTarget = new LinkedHashMap<>();
+
+        for (MappingConfig mapping : mappings) {
+            String normalizedTarget = normalizeTargetTable(mapping.getTableTarget());
+            groupedByTarget.computeIfAbsent(normalizedTarget, ignored -> new ArrayList<>()).add(mapping);
+        }
+
+        Map<String, TableLoadPlan> plans = new LinkedHashMap<>();
+
+        for (Map.Entry<String, List<MappingConfig>> entry : groupedByTarget.entrySet()) {
+            String targetTable = entry.getKey();
+            List<MappingConfig> groupMappings = entry.getValue();
+
+            IngestionType type = resolveTypeByTarget(targetTable);
+            String sourceTable = requireTableName(groupMappings.get(0).getTableSource(), "source table");
+
+            Map<String, String> columnMapping = new LinkedHashMap<>();
+            for (MappingConfig mapping : groupMappings) {
+                String rowSourceTable = requireTableName(mapping.getTableSource(), "source table");
+                if (!rowSourceTable.equalsIgnoreCase(sourceTable)) {
+                    throw new IllegalArgumentException(
+                            "Inconsistent source tables for target " + targetTable + " in config group"
+                    );
+                }
+
+                String sourceColumn = requireColumnName(mapping.getColumnSource(), "source column");
+                String targetColumn = requireColumnName(mapping.getColumnTarget(), "target column");
+
+                String previous = columnMapping.putIfAbsent(sourceColumn, targetColumn);
+                if (previous != null && !previous.equalsIgnoreCase(targetColumn)) {
+                    throw new IllegalArgumentException(
+                            "Conflicting mapping for source column " + sourceColumn + " in target " + targetTable
+                    );
                 }
             }
-            
-        } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-            rows = excelReaderService.readExcelFile(filePath, batchId);
-            
-        } else if (fileName.endsWith(".json")) {
-            rows = jsonReaderService.readJsonFile(filePath, batchId);
-            
-        } else {
-            throw new IllegalArgumentException("Unsupported file format. Use .xlsx, .xls, .sql, or .json");
-        }
-        
-        if (rows.isEmpty()) {
-            log.warn("No data rows found in file: {}", filePath);
-            return new ProcessResult(0, Map.of());
-        }
-        
-        // ── STEP 2: Resolve and apply column mapping ─────
-        List<String> fileColumns = new ArrayList<>(rows.get(0).getData().keySet());
-        
-        Map<String, String> resolvedMapping = columnMappingService.resolveMapping(
-            fileColumns, fileType, columnMapping);
-        
-        List<ExcelRowDto> mappedRows = rows.stream().map(row -> {
-            Map<String, String> mappedData = columnMappingService.applyMapping(
-                row.getData(), resolvedMapping, fileType);
-            return row.toBuilder().data(mappedData).build();
-        }).collect(Collectors.toList());
-        
-        log.info("Mapped {} rows for type {}", mappedRows.size(), fileType);
-        
-        // ── STEP 3: Insert into staging ──────────────────
-        int savedCount = switch (fileType.toUpperCase()) {
-            case "TIERS" -> saveTiersData(mappedRows);
-            case "CONTRAT" -> saveContratData(mappedRows);
-            case "COMPTA" -> saveComptaData(mappedRows, dateBal);
-            default -> throw new IllegalArgumentException("Unknown file type: " + fileType);
-        };
-        
-        log.info("Saved {} records", savedCount);
-        return new ProcessResult(savedCount, resolvedMapping);
-    }
 
-    /**
-     * Auto-detect entity type from SQL table name.
-     * INSERT INTO staging.stg_tiers_raw → TIERS
-     */
-    private String detectTypeFromSql(Path filePath) throws IOException {
-        String content = Files.readString(filePath).toLowerCase();
-        if (content.contains("stg_tiers")) return "TIERS";
-        if (content.contains("stg_contrat")) return "CONTRAT";
-        if (content.contains("stg_compta")) return "COMPTA";
-        return "TIERS"; // default fallback
-    }
-
-    private int saveTiersData(List<ExcelRowDto> rows) {
-        List<StgTiersRaw> entities = new ArrayList<>();
-        
-        for (ExcelRowDto row : rows) {
-            Map<String, String> data = row.getData();
-            
-            StgTiersRaw entity = StgTiersRaw.builder()
-                    .idtiers(getValue(data, "idtiers"))
-                    .nomprenom(getValue(data, "nomprenom"))
-                    .raisonsoc(getValue(data, "raisonsoc"))
-                    .residence(getValue(data, "residence"))
-                    .agenteco(getValue(data, "agenteco"))
-                    .sectionactivite(getValue(data, "sectionactivite"))
-                    .chiffreaffaires(getValue(data, "chiffreaffaires"))
-                    .nationalite(getValue(data, "nationalite"))
-                    .douteux(getValue(data, "douteux"))
-                    .datdouteux(getValue(data, "datdouteux"))
-                    .grpaffaires(parseInteger(getValue(data, "grpaffaires")))
-                    .nomgrpaffaires(getValue(data, "nomgrpaffaires"))
-                    .residencenum(parseInteger(getValue(data, "residencenum")))
-                    .build();
-            
-            entities.add(entity);
-            
-            if (entities.size() >= BATCH_SIZE) {
-                tiersRepository.saveAll(entities);
-                entities.clear();
+            if (columnMapping.isEmpty()) {
+                throw new IllegalArgumentException("No column mappings found for target " + targetTable);
             }
+
+            plans.put(targetTable, new TableLoadPlan(type, sourceTable, targetTable, columnMapping));
         }
-        
-        if (!entities.isEmpty()) {
-            tiersRepository.saveAll(entities);
-        }
-        
-        return rows.size();
+
+        return plans;
     }
 
-    private int saveContratData(List<ExcelRowDto> rows) {
-        List<StgContratRaw> entities = new ArrayList<>();
-        
-        for (ExcelRowDto row : rows) {
-            Map<String, String> data = row.getData();
-            
-            StgContratRaw entity = StgContratRaw.builder()
-                    .agence(getValue(data, "agence"))
-                    .devise(getValue(data, "devise"))
-                    .idcontrat(getValue(data, "idcontrat"))
-                    .ancienneteimpaye(getValue(data, "ancienneteimpaye"))
-                    .objetfinance(getValue(data, "objetfinance"))
-                    .typcontrat(getValue(data, "typcontrat"))
-                    .datouv(getValue(data, "datouv"))
-                    .datech(getValue(data, "datech"))
-                    .idtiers(getValue(data, "idtiers"))
-                    .tauxcontrat(getValue(data, "tauxcontrat"))
-                    .actif(getValue(data, "actif"))
-                    .build();
-            
-            entities.add(entity);
-            
-            if (entities.size() >= BATCH_SIZE) {
-                contratRepository.saveAll(entities);
-                entities.clear();
-            }
-        }
-        
-        if (!entities.isEmpty()) {
-            contratRepository.saveAll(entities);
-        }
-        
-        return rows.size();
-    }
+    private void requireAllTargets(Map<String, TableLoadPlan> plansByTarget) {
+        List<String> missingTargets = new ArrayList<>();
 
-    private int saveComptaData(List<ExcelRowDto> rows, String dateBal) {
-        List<StgComptaRaw> entities = new ArrayList<>();
-        
-        for (ExcelRowDto row : rows) {
-            Map<String, String> data = row.getData();
-            
-            StgComptaRaw entity = StgComptaRaw.builder()
-                    .agence(getValue(data, "agence"))
-                    .devise(getValue(data, "devise"))
-                    .compte(getValue(data, "compte"))
-                    .chapitre(getValue(data, "chapitre"))
-                    .libellecompte(getValue(data, "libellecompte"))
-                    .idtiers(getValue(data, "idtiers"))
-                    .soldeorigine(getValue(data, "soldeorigine"))
-                    .soldeconvertie(getValue(data, "soldeconvertie"))
-                    .devisebbnq(getValue(data, "devisebbnq"))
-                    .cumulmvtdb(getValue(data, "cumulmvtdb"))
-                    .cumulmvtcr(getValue(data, "cumulmvtcr"))
-                    .soldeinitdebmois(getValue(data, "soldeinitdebmois"))
-                    .idcontrat(getValue(data, "idcontrat"))
-                    .amount(getValue(data, "amount"))
-                    .actif(getValue(data, "actif"))
-                    .dateBal(dateBal)
-                    .build();
-            
-            entities.add(entity);
-            
-            if (entities.size() >= BATCH_SIZE) {
-                comptaRepository.saveAll(entities);
-                entities.clear();
-            }
+        if (!plansByTarget.containsKey(TARGET_TIERS)) {
+            missingTargets.add(TARGET_TIERS);
         }
-        
-        if (!entities.isEmpty()) {
-            comptaRepository.saveAll(entities);
+        if (!plansByTarget.containsKey(TARGET_CONTRAT)) {
+            missingTargets.add(TARGET_CONTRAT);
         }
-        
-        return rows.size();
-    }
+        if (!plansByTarget.containsKey(TARGET_COMPTA)) {
+            missingTargets.add(TARGET_COMPTA);
+        }
 
-    private String getValue(Map<String, String> data, String key) {
-        String value = data.getOrDefault(key, null);
-        return cleanNumericString(value);
-    }
-
-    /**
-     * Clean numeric strings by removing trailing ".0" that Excel adds to integer values.
-     * For example: "1232.0" becomes "1232"
-     */
-    private String cleanNumericString(String value) {
-        if (value == null || value.isBlank()) {
-            return value;
-        }
-        // Remove trailing .0 from numeric values (Excel reads integers as doubles)
-        if (value.matches("^-?\\d+\\.0$")) {
-            return value.substring(0, value.length() - 2);
-        }
-        return value;
-    }
-
-    private Integer parseInteger(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            String cleaned = cleanNumericString(value);
-            return Integer.parseInt(cleaned.trim());
-        } catch (NumberFormatException e) {
-            return null;
+        if (!missingTargets.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Mapping config group must include mappings for all targets (TIERS, CONTRAT, COMPTA). Missing: "
+                            + String.join(", ", missingTargets)
+            );
         }
     }
 
-    private void validateLoadRequest(LoadRequest request) {
+    private void validateLoadRequest(LoadFromDbRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
+        if (request.getConfigGroupNumber() == null || request.getConfigGroupNumber() <= 0) {
+            throw new IllegalArgumentException("configGroupNumber is required and must be > 0");
+        }
         validateConnectionRequest(request.getConnection());
-        validateTypeAndDate(request.getType(), request.getDateBal());
-        validateTableName(request.getConnection().getTable(), "source table");
-
-        if (request.getMapping() != null) {
-            for (Map.Entry<String, String> entry : request.getMapping().entrySet()) {
-                if (entry.getKey() == null || entry.getKey().isBlank()) {
-                    throw new IllegalArgumentException("Invalid mapping: source column cannot be empty");
-                }
-                if (entry.getValue() == null || entry.getValue().isBlank()) {
-                    throw new IllegalArgumentException("Invalid mapping: target column cannot be empty");
-                }
-            }
-        }
-    }
-
-    private Map<String, String> resolveDbLoadMapping(LoadRequest request, List<ColumnMeta> sourceColumns) {
-        List<String> sourceColumnNames = sourceColumns.stream()
-                .map(ColumnMeta::getColumnName)
-                .collect(Collectors.toList());
-
-        Map<String, String> explicitMapping = request.getMapping() == null ? Map.of() : request.getMapping();
-        Map<String, String> resolved = columnMappingService.resolveMapping(
-                sourceColumnNames,
-                request.getType().name(),
-                explicitMapping
-        );
-
-        List<String> targetSchemaColumns = columnMappingService.getSchemaColumns(request.getType().name());
-        Map<String, String> effective = new LinkedHashMap<>();
-        for (Map.Entry<String, String> entry : resolved.entrySet()) {
-            String targetColumn = entry.getValue();
-            if (targetColumn != null && targetSchemaColumns.contains(targetColumn.toLowerCase())) {
-                effective.put(entry.getKey(), targetColumn.toLowerCase());
-            }
-        }
-
-        if (effective.isEmpty()) {
-            throw new IllegalArgumentException("Invalid mapping: no source columns map to supported target columns for type " + request.getType());
-        }
-
-        return effective;
-    }
-
-    private String resolveMappingMode(Map<String, String> requestMapping, Map<String, String> effectiveMapping) {
-        if (requestMapping == null || requestMapping.isEmpty()) {
-            return "auto";
-        }
-        if (requestMapping.size() < effectiveMapping.size()) {
-            return "explicit+auto";
-        }
-        return "explicit";
     }
 
     private void validateConnectionRequest(DbConnectionRequest request) {
@@ -421,29 +189,92 @@ public class EtlService {
             throw new IllegalArgumentException("dbType is required");
         }
         if (isBlank(request.getHost()) || isBlank(request.getDatabase())
-                || isBlank(request.getUsername()) || isBlank(request.getPassword())
-                || isBlank(request.getTable())) {
-            throw new IllegalArgumentException("host, database, username, password, and table are required");
+                || isBlank(request.getUsername()) || isBlank(request.getPassword())) {
+            throw new IllegalArgumentException("host, database, username, and password are required");
         }
         if (request.getPort() <= 0 || request.getPort() > 65535) {
             throw new IllegalArgumentException("Invalid port");
         }
     }
 
-    private void validateTypeAndDate(IngestionType type, String dateBal) {
-        if (type == null) {
-            throw new IllegalArgumentException("type is required and must be TIERS, CONTRAT, or COMPTA");
+    private void validateDateForComptaIfNeeded(String dateBal, Map<String, TableLoadPlan> plansByTarget) {
+        if (!plansByTarget.containsKey(TARGET_COMPTA)) {
+            return;
         }
-        if (type == IngestionType.COMPTA) {
-            if (isBlank(dateBal)) {
-                throw new IllegalArgumentException("date_bal is required for COMPTA. Format: dd/MM/yyyy");
-            }
-            try {
-                LocalDate.parse(dateBal, DATE_FORMATTER);
-            } catch (DateTimeParseException e) {
-                throw new IllegalArgumentException("Invalid date_bal format. Must be dd/MM/yyyy");
-            }
+        if (isBlank(dateBal)) {
+            throw new IllegalArgumentException("date_bal is required when loading COMPTA. Format: dd/MM/yyyy");
         }
+        try {
+            LocalDate.parse(dateBal, DATE_FORMATTER);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Invalid date_bal format. Must be dd/MM/yyyy");
+        }
+    }
+
+    private LoadRequest buildConnectorRequest(LoadFromDbRequest request, TableLoadPlan plan) {
+        DbConnectionRequest sourceConnection = new DbConnectionRequest();
+        sourceConnection.setHost(request.getConnection().getHost());
+        sourceConnection.setPort(request.getConnection().getPort());
+        sourceConnection.setDatabase(request.getConnection().getDatabase());
+        sourceConnection.setDbType(request.getConnection().getDbType());
+        sourceConnection.setUsername(request.getConnection().getUsername());
+        sourceConnection.setPassword(request.getConnection().getPassword());
+        sourceConnection.setTable(plan.sourceTable());
+
+        LoadRequest connectorRequest = new LoadRequest();
+        connectorRequest.setConnection(sourceConnection);
+        connectorRequest.setType(plan.type());
+        connectorRequest.setDateBal(request.getDateBal());
+        connectorRequest.setTargetTable(plan.targetTable());
+        connectorRequest.setMapping(new LinkedHashMap<>(plan.columnMapping()));
+
+        return connectorRequest;
+    }
+
+    private IngestionType resolveTypeByTarget(String targetTable) {
+        if (TARGET_TIERS.equalsIgnoreCase(targetTable)) {
+            return IngestionType.TIERS;
+        }
+        if (TARGET_CONTRAT.equalsIgnoreCase(targetTable)) {
+            return IngestionType.CONTRAT;
+        }
+        if (TARGET_COMPTA.equalsIgnoreCase(targetTable)) {
+            return IngestionType.COMPTA;
+        }
+        throw new IllegalArgumentException("Unsupported target table for ingestion type resolution: " + targetTable);
+    }
+
+    private String normalizeTargetTable(String tableTarget) {
+        String normalized = requireTableName(tableTarget, "target table").toLowerCase();
+
+        if ("stg_tiers_raw".equals(normalized) || TARGET_TIERS.equals(normalized)) {
+            return TARGET_TIERS;
+        }
+        if ("stg_contrat_raw".equals(normalized) || TARGET_CONTRAT.equals(normalized)) {
+            return TARGET_CONTRAT;
+        }
+        if ("stg_compta_raw".equals(normalized) || TARGET_COMPTA.equals(normalized)) {
+            return TARGET_COMPTA;
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported target table in mapping_config: " + tableTarget
+                        + ". Allowed targets: stg_tiers_raw, stg_contrat_raw, stg_compta_raw"
+        );
+    }
+
+    private String requireTableName(String tableName, String label) {
+        if (isBlank(tableName) || !TABLE_NAME_PATTERN.matcher(tableName).matches()) {
+            throw new IllegalArgumentException("Invalid " + label + " name: " + tableName);
+        }
+        return tableName.trim();
+    }
+
+    private String requireColumnName(String columnName, String label) {
+        if (isBlank(columnName) || !COLUMN_NAME_PATTERN.matcher(columnName.trim()).matches()) {
+            throw new IllegalArgumentException("Invalid " + label + " name: " + columnName);
+        }
+        return columnName.trim();
     }
 
     private void validateExternalConnection(DbConnectionRequest request) {
@@ -454,24 +285,10 @@ public class EtlService {
         }
     }
 
-    private String resolveTargetTable(IngestionType type) {
-        return switch (type) {
-            case TIERS -> TARGET_TIERS;
-            case CONTRAT -> TARGET_CONTRAT;
-            case COMPTA -> TARGET_COMPTA;
-        };
-    }
-
     private long countRows(String tableName) {
-        validateTableName(tableName, "target table");
+        requireTableName(tableName, "target table");
         Long result = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
         return result == null ? 0L : result;
-    }
-
-    private void validateTableName(String tableName, String label) {
-        if (isBlank(tableName) || !TABLE_NAME_PATTERN.matcher(tableName).matches()) {
-            throw new IllegalArgumentException("Invalid " + label + " name");
-        }
     }
 
     private boolean isBlank(String value) {
@@ -639,5 +456,13 @@ public class EtlService {
                 date_bal DATE
             )
             """);
+    }
+
+    private record TableLoadPlan(
+            IngestionType type,
+            String sourceTable,
+            String targetTable,
+            Map<String, String> columnMapping
+    ) {
     }
 }

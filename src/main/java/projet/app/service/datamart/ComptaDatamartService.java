@@ -30,6 +30,7 @@ public class ComptaDatamartService {
         int chapitreRows = populateChapitreDimension();
         int compteRows = populateCompteDimension();
         int dateRows = populateDateDimension();
+        truncateFactBalance();
         int factRows = populateFactBalance();
 
         LoadResult result = new LoadResult();
@@ -42,6 +43,10 @@ public class ComptaDatamartService {
 
         log.info("Compta datamart load completed: {}", result);
         return result;
+    }
+
+    private void truncateFactBalance() {
+        jdbcTemplate.execute("TRUNCATE TABLE datamart.fact_balance");
     }
 
     @Transactional(readOnly = true)
@@ -207,7 +212,7 @@ public class ComptaDatamartService {
                 id_contrat TEXT REFERENCES datamart.dim_contrat(id),
                 id_date BIGINT REFERENCES datamart.sub_dim_date(id),
                 soldeorigine BIGINT,
-                soldeconvertie BIGINT,
+                soldeconvertie NUMERIC(38,10),
                 cumulmvtdb BIGINT,
                 cumulmvtcr BIGINT,
                 soldeinitdebmois BIGINT,
@@ -216,7 +221,19 @@ public class ComptaDatamartService {
             )
             """);
 
-        // If duplicates were inserted before this rule existed, keep only the first row per business key.
+        // Keep existing environments in sync when table already exists with BIGINT.
+        jdbcTemplate.execute("""
+            ALTER TABLE datamart.fact_balance
+            ALTER COLUMN soldeconvertie TYPE NUMERIC(38,10)
+            USING soldeconvertie::NUMERIC(38,10)
+            """);
+
+        // Replace old key with full-row uniqueness (all inserted columns except surrogate id).
+        jdbcTemplate.execute("""
+            DROP INDEX IF EXISTS datamart.ux_fact_balance_business_key
+            """);
+
+        // Normalize historical data to one row per full inserted-row key.
         jdbcTemplate.execute("""
             DELETE FROM datamart.fact_balance fb
             WHERE fb.id IN (
@@ -225,10 +242,21 @@ public class ComptaDatamartService {
                         id,
                         ROW_NUMBER() OVER (
                             PARTITION BY
+                                COALESCE(id_agence::TEXT, '__NULL__'),
+                                COALESCE(id_devise::TEXT, '__NULL__'),
+                                COALESCE(id_devisebnq::TEXT, '__NULL__'),
+                                COALESCE(id_compte::TEXT, '__NULL__'),
                                 COALESCE(id_client, '__NULL__'),
                                 COALESCE(id_contrat, '__NULL__'),
-                                COALESCE(id_chapitre, -1),
-                                COALESCE(id_date, -1)
+                                COALESCE(id_chapitre::TEXT, '__NULL__'),
+                                COALESCE(id_date::TEXT, '__NULL__'),
+                                COALESCE(soldeorigine::TEXT, '__NULL__'),
+                                COALESCE(soldeconvertie::TEXT, '__NULL__'),
+                                COALESCE(cumulmvtdb::TEXT, '__NULL__'),
+                                COALESCE(cumulmvtcr::TEXT, '__NULL__'),
+                                COALESCE(soldeinitdebmois::TEXT, '__NULL__'),
+                                COALESCE(amount::TEXT, '__NULL__'),
+                                COALESCE(actif::TEXT, '__NULL__')
                             ORDER BY id
                         ) AS rn
                     FROM datamart.fact_balance
@@ -237,34 +265,26 @@ public class ComptaDatamartService {
             )
             """);
 
-        // Business key uniqueness for balance facts.
+        // Full-row uniqueness for balance facts (all inserted columns except id).
         jdbcTemplate.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS ux_fact_balance_business_key
             ON datamart.fact_balance (
+                COALESCE(id_agence::TEXT, '__NULL__'),
+                COALESCE(id_devise::TEXT, '__NULL__'),
+                COALESCE(id_devisebnq::TEXT, '__NULL__'),
+                COALESCE(id_compte::TEXT, '__NULL__'),
                 COALESCE(id_client, '__NULL__'),
                 COALESCE(id_contrat, '__NULL__'),
-                COALESCE(id_chapitre, -1),
-                COALESCE(id_date, -1)
+                COALESCE(id_chapitre::TEXT, '__NULL__'),
+                COALESCE(id_date::TEXT, '__NULL__'),
+                COALESCE(soldeorigine::TEXT, '__NULL__'),
+                COALESCE(soldeconvertie::TEXT, '__NULL__'),
+                COALESCE(cumulmvtdb::TEXT, '__NULL__'),
+                COALESCE(cumulmvtcr::TEXT, '__NULL__'),
+                COALESCE(soldeinitdebmois::TEXT, '__NULL__'),
+                COALESCE(amount::TEXT, '__NULL__'),
+                COALESCE(actif::TEXT, '__NULL__')
             )
-            """);
-
-        // Normalize historical data to one row per business duplicate key.
-        jdbcTemplate.execute("""
-            DELETE FROM datamart.fact_balance fb
-            USING (
-                SELECT id
-                FROM (
-                    SELECT
-                        id,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY id_client, id_contrat, id_chapitre, id_date
-                            ORDER BY id
-                        ) AS rn
-                    FROM datamart.fact_balance
-                ) ranked
-                WHERE ranked.rn > 1
-            ) dup
-            WHERE fb.id = dup.id
             """);
     }
 
@@ -364,6 +384,7 @@ public class ComptaDatamartService {
         String parseDateExpr = parseDateExpression("t.date_bal");
         String parseLongExpr = "CASE WHEN NULLIF(TRIM(%s), '') ~ '^-?[0-9]+(\\\\.[0-9]+)?([eE][+-]?[0-9]+)?$' " +
                 "THEN (NULLIF(TRIM(%s), '')::DOUBLE PRECISION)::BIGINT ELSE NULL END";
+        String parseDecimalExpr = "NULLIF(TRIM(%s), '')::DOUBLE PRECISION::NUMERIC(38,10)";
 
         String sql = """
             WITH src AS (
@@ -458,7 +479,7 @@ public class ComptaDatamartService {
             ON CONFLICT DO NOTHING
             """.formatted(
                 parseLongExpr.formatted("t.soldeorigine", "t.soldeorigine"),
-                parseLongExpr.formatted("t.soldeconvertie", "t.soldeconvertie"),
+                parseDecimalExpr.formatted("t.soldeconvertie"),
                 parseLongExpr.formatted("t.cumulmvtdb", "t.cumulmvtdb"),
                 parseLongExpr.formatted("t.cumulmvtcr", "t.cumulmvtcr"),
                 parseLongExpr.formatted("t.soldeinitdebmois", "t.soldeinitdebmois"),

@@ -9,6 +9,8 @@ import projet.app.entity.quality.DataQualityResultTiers;
 import projet.app.repository.quality.DataQualityResultTiersRepository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Data Quality Service for STG_TIERS_RAW staging table.
@@ -77,6 +79,66 @@ public class TiersDataQualityService {
                 .build();
         
         return resultRepository.save(entity);
+    }
+
+    /**
+     * Fetch rows that violate Rule 1 (required NULL values).
+     */
+    public List<Map<String, Object>> fetchNullCheckList() {
+        String sql = """
+            SELECT id, idtiers, nomprenom, raisonsoc, residence, agenteco,
+                   sectionactivite, chiffreaffaires, nationalite, douteux,
+                   datdouteux, nomgrpaffaires
+            FROM staging.stg_tiers_raw
+            WHERE residence IS NULL
+               OR agenteco IS NULL
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
+     * Fetch rows that violate Rule 2 (duplicate idtiers, keeping first occurrence).
+     */
+    public List<Map<String, Object>> fetchDuplicateList() {
+        String sql = """
+            SELECT id, idtiers, nomprenom, raisonsoc, residence, agenteco,
+                   sectionactivite, chiffreaffaires, nationalite, douteux,
+                   datdouteux, nomgrpaffaires
+            FROM (
+                SELECT id, idtiers, nomprenom, raisonsoc, residence, agenteco,
+                       sectionactivite, chiffreaffaires, nationalite, douteux,
+                       datdouteux, nomgrpaffaires,
+                       ROW_NUMBER() OVER (PARTITION BY idtiers ORDER BY id) as rn
+                FROM staging.stg_tiers_raw
+                WHERE idtiers IS NOT NULL
+            ) duplicates
+            WHERE rn > 1
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
+     * Fetch rows that violate Rule 3 (invalid data types).
+     */
+    public List<Map<String, Object>> fetchTypeCheckList() {
+        String sql = """
+            SELECT id, idtiers, nomprenom, raisonsoc, residence, agenteco,
+                   sectionactivite, chiffreaffaires, nationalite, douteux,
+                   datdouteux, nomgrpaffaires
+            FROM staging.stg_tiers_raw
+            WHERE
+                (nomprenom IS NOT NULL AND nomprenom <> '' AND nomprenom ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (raisonsoc IS NOT NULL AND raisonsoc <> '' AND raisonsoc ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (residence IS NOT NULL AND residence <> '' AND residence ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (nomgrpaffaires IS NOT NULL AND nomgrpaffaires <> '' AND nomgrpaffaires ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (agenteco IS NOT NULL AND agenteco <> '' AND agenteco !~ '^-?[0-9]+$')
+                OR (sectionactivite IS NOT NULL AND sectionactivite <> '' AND sectionactivite !~ '^-?[0-9]+$')
+                OR (idtiers IS NOT NULL AND idtiers <> '' AND idtiers !~ '^-?[0-9]+$')
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
     }
 
     /**

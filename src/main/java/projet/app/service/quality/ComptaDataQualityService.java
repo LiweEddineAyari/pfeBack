@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import projet.app.entity.quality.DataQualityResultCompta;
 import projet.app.repository.quality.DataQualityResultComptaRepository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ComptaDataQualityService {
+
+    private static final BigDecimal NEAR_ZERO_THRESHOLD = BigDecimal.ONE;
 
     private final JdbcTemplate jdbcTemplate;
     private final DataQualityResultComptaRepository resultRepository;
@@ -31,10 +34,10 @@ public class ComptaDataQualityService {
         result.setNullCheckCount(nullCount);
         log.info("Rule 1 (Null Check): Found {} rows with null values", nullCount);
 
-        // Rule 2: Duplicate check by chapitre, compte, idtiers (no deletion)
+        // Rule 2: Duplicate check by all business columns (no deletion)
         int duplicateCount = countDuplicateRows();
         result.setDuplicateCount(duplicateCount);
-        log.info("Rule 2 (Duplicate Check): Found {} duplicate rows by chapitre, compte, idtiers", duplicateCount);
+        log.info("Rule 2 (Duplicate Check): Found {} duplicate rows by all columns", duplicateCount);
 
         // Rule 3: Type validation - count rows with invalid data types (no deletion)
         int typeCheckCount = countRowsWithInvalidTypes();
@@ -163,7 +166,7 @@ public class ComptaDataQualityService {
     }
 
     /**
-     * Rule 2: Count duplicate rows by chapitre, compte, idtiers (keeping first occurrence).
+     * Rule 2: Count duplicate rows by all business columns (keeping first occurrence).
      * No rows are deleted.
      */
     private int countDuplicateRows() {
@@ -172,13 +175,26 @@ public class ComptaDataQualityService {
                 SELECT
                     id,
                     ROW_NUMBER() OVER (
-                        PARTITION BY TRIM(chapitre), TRIM(compte), TRIM(idtiers)
+                        PARTITION BY
+                            COALESCE(NULLIF(TRIM(agence), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(devise), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(compte), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(chapitre), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(libellecompte), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(idtiers), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(soldeorigine), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(soldeconvertie), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(devisebbnq), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(cumulmvtdb), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(cumulmvtcr), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(soldeinitdebmois), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(idcontrat), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(amount), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(actif), ''), '__NULL__'),
+                            COALESCE(NULLIF(TRIM(date_bal), ''), '__NULL__')
                         ORDER BY id
                     ) AS rn
                 FROM staging.stg_compta_raw
-                WHERE NULLIF(TRIM(chapitre), '') IS NOT NULL
-                  AND NULLIF(TRIM(compte), '') IS NOT NULL
-                  AND NULLIF(TRIM(idtiers), '') IS NOT NULL
             ) duplicates
             WHERE rn > 1
             """;
@@ -187,7 +203,7 @@ public class ComptaDataQualityService {
     }
 
     /**
-     * Fetch rows for Rule 2: duplicate rows by chapitre, compte, idtiers (excluding first row).
+     * Fetch rows for Rule 2: duplicate rows by all business columns (excluding first row).
      */
     public List<Map<String, Object>> fetchDuplicateList() {
         String sql = """
@@ -199,13 +215,26 @@ public class ComptaDataQualityService {
                     SELECT
                         id,
                         ROW_NUMBER() OVER (
-                            PARTITION BY TRIM(chapitre), TRIM(compte), TRIM(idtiers)
+                            PARTITION BY
+                                COALESCE(NULLIF(TRIM(agence), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(devise), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(compte), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(chapitre), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(libellecompte), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(idtiers), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(soldeorigine), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(soldeconvertie), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(devisebbnq), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(cumulmvtdb), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(cumulmvtcr), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(soldeinitdebmois), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(idcontrat), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(amount), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(actif), ''), '__NULL__'),
+                                COALESCE(NULLIF(TRIM(date_bal), ''), '__NULL__')
                             ORDER BY id
                         ) AS rn
                     FROM staging.stg_compta_raw
-                    WHERE NULLIF(TRIM(chapitre), '') IS NOT NULL
-                      AND NULLIF(TRIM(compte), '') IS NOT NULL
-                      AND NULLIF(TRIM(idtiers), '') IS NOT NULL
                 ) duplicates
                 WHERE rn > 1
             ) d ON d.id = c.id
@@ -317,19 +346,65 @@ public class ComptaDataQualityService {
     }
 
     /**
-     * Rule 4: Calculate sum of soldeconvertie for all rows in the table.
-     * Sums rows where soldeconvertie is a valid number (integer, decimal, or scientific notation).
+     * Compute balance sum directly from staging to keep quality flow independent from datamart tables.
      */
-    private long calculateBalanceSum() {
+    private BigDecimal calculateExpectedFactSourceSum() {
         String sql = """
-            SELECT COALESCE(SUM(soldeconvertie::DOUBLE PRECISION), 0)::BIGINT
+            SELECT COALESCE(
+                SUM(
+                    CASE
+                        WHEN NULLIF(TRIM(soldeconvertie), '') IS NULL THEN 0::NUMERIC(38,10)
+                        ELSE NULLIF(TRIM(soldeconvertie), '')::DOUBLE PRECISION::NUMERIC(38,10)
+                    END
+                ),
+                0
+            )::NUMERIC(38,10) AS expected_sum
             FROM staging.stg_compta_raw
-            WHERE soldeconvertie IS NOT NULL
-              AND soldeconvertie <> ''
-              AND soldeconvertie ~ '^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$'
             """;
 
-        return jdbcTemplate.queryForObject(sql, Long.class);
+        BigDecimal expectedSum = jdbcTemplate.queryForObject(sql, BigDecimal.class);
+        return expectedSum == null ? BigDecimal.ZERO : expectedSum;
+    }
+
+    /**
+     * Rule 4 (quality snapshot): keep legacy long value for persisted quality result.
+     */
+    private long calculateBalanceSum() {
+        BigDecimal normalized = normalizeNearZero(calculateExpectedFactSourceSum());
+        return normalized.longValue();
+    }
+
+    /**
+     * Calculate balance sums from both staging and datamart fact tables.
+     */
+    public Map<String, Object> calculateBalanceSumsFromStagingAndFact() {
+        BigDecimal balanceSum = calculateExpectedFactSourceSum();
+
+        String factSql = """
+            SELECT COALESCE(SUM(soldeconvertie), 0)::NUMERIC(38,10)
+            FROM datamart.fact_balance
+            """;
+        BigDecimal factSum = jdbcTemplate.queryForObject(factSql, BigDecimal.class);
+        if (factSum == null) {
+            factSum = BigDecimal.ZERO;
+        }
+
+        balanceSum = normalizeNearZero(balanceSum);
+        factSum = normalizeNearZero(factSum);
+        BigDecimal difference = normalizeNearZero(balanceSum.subtract(factSum));
+
+        return Map.of(
+                "balanceSum", balanceSum,
+                "factBalanceSoldeconvertieSum", factSum,
+                "difference", difference
+        );
+    }
+
+    private BigDecimal normalizeNearZero(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        return value.abs().compareTo(NEAR_ZERO_THRESHOLD) < 0 ? BigDecimal.ZERO : value;
     }
 
     /**

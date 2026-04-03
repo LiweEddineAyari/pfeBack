@@ -235,7 +235,11 @@ public class ContratDatamartService {
                 WHERE NULLIF(TRIM(agence), '') ~ '^-?[0-9]+$'
             ) src
             WHERE src.numagence IS NOT NULL
-            ON CONFLICT (numagence) DO NOTHING
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM datamart.sub_dim_agence a
+                  WHERE a.numagence = src.numagence
+              )
             """;
         return jdbcTemplate.update(sql);
     }
@@ -249,7 +253,11 @@ public class ContratDatamartService {
                 FROM staging.stg_contrat_raw
             ) src
             WHERE src.devise IS NOT NULL
-            ON CONFLICT (devise) DO NOTHING
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM datamart.sub_dim_devise d
+                  WHERE d.devise = src.devise
+              )
             """;
         return jdbcTemplate.update(sql);
     }
@@ -291,7 +299,11 @@ public class ContratDatamartService {
                 FROM staging.stg_contrat_raw
             ) src
             WHERE src.typcontrat IS NOT NULL
-            ON CONFLICT (typcontrat) DO NOTHING
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM datamart.sub_dim_typcontrat tc
+                  WHERE tc.typcontrat = src.typcontrat
+              )
             """;
         return jdbcTemplate.update(sql);
     }
@@ -304,15 +316,22 @@ public class ContratDatamartService {
 
         String sql = """
             INSERT INTO datamart.sub_dim_date (date_value)
-            SELECT DISTINCT %s AS date_value
+            SELECT DISTINCT parsed.date_value
             FROM (
-                SELECT datouv AS raw_date FROM staging.stg_contrat_raw
-                UNION ALL
-                SELECT datech AS raw_date FROM staging.stg_contrat_raw
-            ) src
-            WHERE %s IS NOT NULL
-            ON CONFLICT (date_value) DO NOTHING
-            """.formatted(parseDateExpr, parseDateExpr);
+                SELECT %s AS date_value
+                FROM (
+                    SELECT datouv AS raw_date FROM staging.stg_contrat_raw
+                    UNION ALL
+                    SELECT datech AS raw_date FROM staging.stg_contrat_raw
+                ) src
+            ) parsed
+            WHERE parsed.date_value IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM datamart.sub_dim_date dt
+                  WHERE dt.date_value = parsed.date_value
+              )
+            """.formatted(parseDateExpr);
 
         return jdbcTemplate.update(sql);
     }
@@ -359,23 +378,43 @@ public class ContratDatamartService {
             FROM staging.stg_contrat_raw t
             LEFT JOIN datamart.dim_client dc
                    ON dc.idtiers = NULLIF(TRIM(t.idtiers), '')
-            LEFT JOIN datamart.sub_dim_agence a
+            LEFT JOIN (
+                SELECT numagence, MIN(id) AS id
+                FROM datamart.sub_dim_agence
+                GROUP BY numagence
+            ) a
                    ON a.numagence = CASE
                                         WHEN NULLIF(TRIM(t.agence), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.agence), '')::INTEGER
                                         ELSE NULL
                                     END
-            LEFT JOIN datamart.sub_dim_devise d
+            LEFT JOIN (
+                SELECT devise, MIN(id) AS id
+                FROM datamart.sub_dim_devise
+                GROUP BY devise
+            ) d
                    ON d.devise = NULLIF(TRIM(t.devise), '')
             LEFT JOIN datamart.sub_dim_objetfinance o
                    ON o.id = CASE
                                  WHEN NULLIF(TRIM(t.objetfinance), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.objetfinance), '')::BIGINT
                                  ELSE NULL
                              END
-            LEFT JOIN datamart.sub_dim_typcontrat tc
+            LEFT JOIN (
+                SELECT typcontrat, MIN(id) AS id
+                FROM datamart.sub_dim_typcontrat
+                GROUP BY typcontrat
+            ) tc
                    ON tc.typcontrat = NULLIF(TRIM(t.typcontrat), '')
-            LEFT JOIN datamart.sub_dim_date dov
+            LEFT JOIN (
+                SELECT date_value, MIN(id) AS id
+                FROM datamart.sub_dim_date
+                GROUP BY date_value
+            ) dov
                    ON dov.date_value = %s
-            LEFT JOIN datamart.sub_dim_date dech
+            LEFT JOIN (
+                SELECT date_value, MIN(id) AS id
+                FROM datamart.sub_dim_date
+                GROUP BY date_value
+            ) dech
                    ON dech.date_value = %s
             WHERE NULLIF(TRIM(t.idcontrat), '') IS NOT NULL
             ON CONFLICT (id) DO NOTHING

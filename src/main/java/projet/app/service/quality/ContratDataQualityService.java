@@ -9,6 +9,8 @@ import projet.app.entity.quality.DataQualityResultContrat;
 import projet.app.repository.quality.DataQualityResultContratRepository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -65,6 +67,74 @@ public class ContratDataQualityService {
                 .build();
 
         return resultRepository.save(entity);
+    }
+
+    /**
+     * Fetch rows that violate Rule 1 (required NULL values).
+     */
+    public List<Map<String, Object>> fetchNullCheckList() {
+        String sql = """
+            SELECT id, agence, devise, idcontrat, ancienneteimpaye, objetfinance,
+                   typcontrat, datouv, datech, idtiers, tauxcontrat, actif
+            FROM staging.stg_contrat_raw
+            WHERE agence IS NULL
+               OR devise IS NULL
+               OR idcontrat IS NULL
+               OR ancienneteimpaye IS NULL
+               OR typcontrat IS NULL
+               OR datouv IS NULL
+               OR datech IS NULL
+               OR idtiers IS NULL
+               OR tauxcontrat IS NULL
+               OR actif IS NULL
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
+     * Fetch rows that violate Rule 2 (duplicate idcontrat, keeping first occurrence).
+     */
+    public List<Map<String, Object>> fetchDuplicateList() {
+        String sql = """
+            SELECT id, agence, devise, idcontrat, ancienneteimpaye, objetfinance,
+                   typcontrat, datouv, datech, idtiers, tauxcontrat, actif
+            FROM (
+                SELECT id, agence, devise, idcontrat, ancienneteimpaye, objetfinance,
+                       typcontrat, datouv, datech, idtiers, tauxcontrat, actif,
+                       ROW_NUMBER() OVER (PARTITION BY idcontrat ORDER BY id) as rn
+                FROM staging.stg_contrat_raw
+                WHERE idcontrat IS NOT NULL
+            ) duplicates
+            WHERE rn > 1
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
+    }
+
+    /**
+     * Fetch rows that violate Rule 3 (invalid data types).
+     */
+    public List<Map<String, Object>> fetchTypeCheckList() {
+        String sql = """
+            SELECT id, agence, devise, idcontrat, ancienneteimpaye, objetfinance,
+                   typcontrat, datouv, datech, idtiers, tauxcontrat, actif
+            FROM staging.stg_contrat_raw
+            WHERE
+                (agence IS NOT NULL AND agence <> '' AND agence !~ '^-?[0-9]+$')
+                OR (ancienneteimpaye IS NOT NULL AND ancienneteimpaye <> '' AND ancienneteimpaye !~ '^-?[0-9]+$')
+                OR (objetfinance IS NOT NULL AND objetfinance <> '' AND objetfinance !~ '^-?[0-9]+$')
+                OR (idtiers IS NOT NULL AND idtiers <> '' AND idtiers !~ '^-?[0-9]+$')
+                OR (tauxcontrat IS NOT NULL AND tauxcontrat <> '' AND tauxcontrat !~ '^-?[0-9]+$')
+                OR (actif IS NOT NULL AND actif <> '' AND actif !~ '^-?[0-9]+$')
+                OR (devise IS NOT NULL AND devise <> '' AND devise ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (idcontrat IS NOT NULL AND idcontrat <> '' AND idcontrat ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (typcontrat IS NOT NULL AND typcontrat <> '' AND typcontrat ~ '^-?[0-9]+\\.?[0-9]*$')
+                OR (datouv IS NOT NULL AND datouv <> '' AND datouv !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' AND datouv !~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}')
+                OR (datech IS NOT NULL AND datech <> '' AND datech !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' AND datech !~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}')
+            ORDER BY id
+            """;
+        return jdbcTemplate.queryForList(sql);
     }
 
     /**
