@@ -12,7 +12,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "mapping_config", schema = "staging")
+@Table(name = "mapping_config", schema = "mapping")
 @Data
 @Builder
 @NoArgsConstructor

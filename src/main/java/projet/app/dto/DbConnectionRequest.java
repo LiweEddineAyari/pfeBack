@@ -28,5 +28,7 @@ public class DbConnectionRequest {
     @NotBlank
     private String password;
 
+    private String schema;
+
     private String table;
 }

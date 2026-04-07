@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import projet.app.dto.MappingConfigRequest;
+import projet.app.dto.MappingGroupSummaryResponse;
 import projet.app.entity.staging.MappingConfig;
 import projet.app.service.mapping.MappingConfigService;
 
@@ -31,6 +32,20 @@ public class MappingConfigController {
     @GetMapping
     public ResponseEntity<List<MappingConfig>> getAll() {
         return ResponseEntity.ok(mappingConfigService.findAll());
+    }
+
+    @GetMapping("/groups")
+    public ResponseEntity<List<MappingGroupSummaryResponse>> getGroupedByConfigGroupNumber() {
+        return ResponseEntity.ok(mappingConfigService.findGroupSummaries());
+    }
+
+    @GetMapping("/groups/{configGroupNumber}")
+    public ResponseEntity<List<MappingConfig>> getByConfigGroupNumber(@PathVariable Integer configGroupNumber) {
+        List<MappingConfig> mappings = mappingConfigService.findByConfigGroupNumber(configGroupNumber);
+        if (mappings.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        return ResponseEntity.ok(mappings);
     }
 
     @GetMapping("/{id}")
@@ -51,6 +66,19 @@ public class MappingConfigController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    @PostMapping("/bulk")
+    public ResponseEntity<?> createMany(@RequestBody List<@Valid MappingConfigRequest> requests) {
+        try {
+            List<MappingConfig> created = mappingConfigService.createMany(requests);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @Valid @RequestBody MappingConfigRequest request) {
         try {
@@ -64,6 +92,21 @@ public class MappingConfigController {
         }
     }
 
+    @PutMapping("/groups/{configGroupNumber}")
+    public ResponseEntity<?> replaceGroup(
+            @PathVariable Integer configGroupNumber,
+            @RequestBody List<@Valid MappingConfigRequest> requests
+    ) {
+        try {
+            return ResponseEntity.ok(mappingConfigService.replaceByConfigGroupNumber(configGroupNumber, requests));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
@@ -71,6 +114,19 @@ public class MappingConfigController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             log.warn("Delete failed for mapping config {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    @DeleteMapping("/groups/{configGroupNumber}")
+    public ResponseEntity<?> deleteByConfigGroupNumber(@PathVariable Integer configGroupNumber) {
+        try {
+            mappingConfigService.deleteByConfigGroupNumber(configGroupNumber);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                     "status", "ERROR",
                     "message", e.getMessage()

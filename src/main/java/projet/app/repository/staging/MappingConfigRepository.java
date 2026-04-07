@@ -10,4 +10,10 @@ import java.util.List;
 public interface MappingConfigRepository extends JpaRepository<MappingConfig, Long> {
 
 	List<MappingConfig> findByConfigGroupNumberOrderByTableTargetAscIdAsc(Integer configGroupNumber);
+
+	List<MappingConfig> findAllByOrderByConfigGroupNumberAscIdAsc();
+
+	boolean existsByConfigGroupNumber(Integer configGroupNumber);
+
+	long deleteByConfigGroupNumber(Integer configGroupNumber);
 }

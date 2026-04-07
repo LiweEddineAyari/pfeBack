@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapping Group Details</title>
+    <style>
+        :root {
+            --bg: #f4efe7;
+            --ink: #1d2630;
+            --surface: #ffffff;
+            --accent: #0a5a7f;
+            --accent-soft: #e3f0f6;
+            --danger: #b21d2f;
+            --border: #d3dbe0;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Gill Sans", "Gill Sans MT", Calibri, sans-serif;
+            color: var(--ink);
+            background:
+                linear-gradient(160deg, #e9f4f7 0%, transparent 45%),
+                radial-gradient(circle at 80% 20%, #ffedcf 0, transparent 30%),
+                var(--bg);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 28px 16px 48px;
+        }
+
+        h1 {
+            margin: 0;
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            margin: 8px 0 18px;
+            opacity: 0.88;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        button {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--ink);
+            padding: 9px 13px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        button.danger {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #fff;
+        }
+
+        .status {
+            min-height: 22px;
+            margin-bottom: 12px;
+        }
+
+        .status.error {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: auto;
+            box-shadow: 0 8px 18px rgba(19, 31, 38, 0.08);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            background: var(--accent-soft);
+            font-size: 0.92rem;
+        }
+
+        input {
+            width: 100%;
+            min-width: 120px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 12px;
+            color: var(--accent);
+            font-weight: 700;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <a class="back" href="/mapping-config-groups.html">Back to groups</a>
+    <h1 id="title">Group Details</h1>
+    <p class="subtitle">Edit all mappings in this group, then save once.</p>
+
+    <div class="toolbar">
+        <button id="addRowBtn">Add row</button>
+        <button class="primary" id="saveBtn">Save group update</button>
+        <button class="danger" id="deleteGroupBtn">Delete group</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>tableSource</th>
+                <th>tableTarget</th>
+                <th>columnSource</th>
+                <th>columnTarget</th>
+                <th>configGroupNumber</th>
+                <th>Row actions</th>
+            </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const groupNumber = Number(params.get("group"));
+
+    const titleEl = document.getElementById("title");
+    const rowsEl = document.getElementById("rows");
+    const statusEl = document.getElementById("status");
+
+    const addRowBtn = document.getElementById("addRowBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const deleteGroupBtn = document.getElementById("deleteGroupBtn");
+
+    if (!Number.isInteger(groupNumber) || groupNumber <= 0) {
+        setStatus("Invalid or missing group query parameter.", true);
+    } else {
+        titleEl.textContent = `Group ${groupNumber} details`;
+        loadGroup();
+    }
+
+    function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.className = isError ? "status error" : "status";
+    }
+
+    function inputCell(name, value) {
+        const td = document.createElement("td");
+        const input = document.createElement("input");
+        input.name = name;
+        input.value = value || "";
+        td.appendChild(input);
+        return td;
+    }
+
+    function addRow(mapping = {}) {
+        const tr = document.createElement("tr");
+
+        tr.appendChild(inputCell("tableSource", mapping.tableSource));
+        tr.appendChild(inputCell("tableTarget", mapping.tableTarget));
+        tr.appendChild(inputCell("columnSource", mapping.columnSource));
+        tr.appendChild(inputCell("columnTarget", mapping.columnTarget));
+
+        const groupTd = document.createElement("td");
+        const groupInput = document.createElement("input");
+        groupInput.name = "configGroupNumber";
+        groupInput.value = String(groupNumber);
+        groupInput.readOnly = true;
+        groupTd.appendChild(groupInput);
+        tr.appendChild(groupTd);
+
+        const actionsTd = document.createElement("td");
+        actionsTd.className = "actions";
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener("click", () => tr.remove());
+        actionsTd.appendChild(removeBtn);
+        tr.appendChild(actionsTd);
+
+        rowsEl.appendChild(tr);
+    }
+
+    function collectPayload() {
+        const rows = [...rowsEl.querySelectorAll("tr")];
+        return rows.map(row => {
+            const get = (name) => row.querySelector(`input[name='${name}']`).value.trim();
+            return {
+                tableSource: get("tableSource"),
+                tableTarget: get("tableTarget"),
+                columnSource: get("columnSource"),
+                columnTarget: get("columnTarget"),
+                configGroupNumber: groupNumber
+            };
+        });
+    }
+
+    async function loadGroup() {
+        setStatus("Loading group details...");
+        rowsEl.innerHTML = "";
+
+        try {
+            const res = await fetch(`/api/mapping-configs/groups/${groupNumber}`);
+            if (!res.ok) {
+                throw new Error(`Request failed with status ${res.status}`);
+            }
+            const mappings = await res.json();
+            mappings.forEach(addRow);
+            setStatus(`Loaded ${mappings.length} mapping rows.`);
+        } catch (error) {
+            setStatus(error.message || "Failed to load group", true);
+        }
+    }
+
+    async function saveGroup() {
+        const payload = collectPayload();
+        if (payload.length === 0) {
+            setStatus("Cannot save an empty group. Add at least one row.", true);
+            return;
+        }
+
+        if (payload.some(m => !m.tableSource || !m.tableTarget || !m.columnSource || !m.columnTarget)) {
+            setStatus("All row fields must be filled before save.", true);
+            return;
+        }
+
+        setStatus("Saving group update...");
+
+        try {
+            const res = await fetch(`/api/mapping-configs/groups/${groupNumber}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const maybeError = await res.json().catch(() => ({}));
+                const message = maybeError.message || `Request failed with status ${res.status}`;
+                throw new Error(message);
+            }
+
+            const updated = await res.json();
+            rowsEl.innerHTML = "";
+            updated.forEach(addRow);
+            setStatus("Group updated successfully.");
+        } catch (error) {
+            setStatus(error.message || "Failed to save group", true);
+        }
+    }
+
+    async function deleteGroup() {
+        if (!confirm(`Delete all mappings in group ${groupNumber}?`)) {
+            return;
+        }
+
+        setStatus("Deleting group...");
+
+        try {
+            const res = await fetch(`/api/mapping-configs/groups/${groupNumber}`, { method: "DELETE" });
+            if (!res.ok) {
+                const maybeError = await res.json().catch(() => ({}));
+                const message = maybeError.message || `Request failed with status ${res.status}`;
+                throw new Error(message);
+            }
+
+            setStatus("Group deleted. Redirecting to grouped list page...");
+            setTimeout(() => {
+                window.location.href = "/mapping-config-groups.html";
+            }, 600);
+        } catch (error) {
+            setStatus(error.message || "Failed to delete group", true);
+        }
+    }
+
+    addRowBtn.addEventListener("click", () => addRow());
+    saveBtn.addEventListener("click", saveGroup);
+    deleteGroupBtn.addEventListener("click", deleteGroup);
+</script>
+</body>
+</html>

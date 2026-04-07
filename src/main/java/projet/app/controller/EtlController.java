@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import projet.app.dto.LoadFromDbRequest;
 import projet.app.dto.LoadFromDbResponse;
+import projet.app.dto.SourceMetadataRequest;
+import projet.app.dto.SourceTableDetailsResponse;
 import projet.app.service.datamart.ComptaDatamartService;
 import projet.app.service.datamart.ContratDatamartService;
 import projet.app.service.datamart.TiersDatamartService;
@@ -43,7 +45,7 @@ public class EtlController {
 
     /**
      * Load TIERS, CONTRAT and COMPTA staging tables in one call.
-     * Mapping is resolved from staging.mapping_config by configGroupNumber.
+        * Mapping is resolved from mapping.mapping_config by configGroupNumber.
      */
     @PostMapping("/load-from-db")
     public ResponseEntity<?> loadFromDatabase(@Valid @RequestBody LoadFromDbRequest request) {
@@ -60,6 +62,34 @@ public class EtlController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "message", "Failed to load data from source database"
+            ));
+        }
+    }
+
+    /**
+     * Fetch source database tables and their columns using dynamic connection settings.
+        * Optionally provide connection.schema to restrict results to one schema.
+     * POST /api/etl/source/tables-columns
+     */
+    @PostMapping("/source/tables-columns")
+    public ResponseEntity<?> fetchSourceTablesAndColumns(@Valid @RequestBody SourceMetadataRequest request) {
+        try {
+            List<SourceTableDetailsResponse> tables = etlService.getSourceTablesWithColumns(request.getConnection());
+            return ResponseEntity.ok(Map.of(
+                    "status", "COMPLETED",
+                    "tableCount", tables.size(),
+                    "tables", tables
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("Error fetching source tables and columns: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "ERROR",
+                    "message", "Failed to fetch source tables and columns"
             ));
         }
     }

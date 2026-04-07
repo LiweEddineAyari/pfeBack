@@ -4,8 +4,11 @@ CREATE SCHEMA IF NOT EXISTS staging;
 -- Create datamart schema if it doesn't exist
 CREATE SCHEMA IF NOT EXISTS datamart;
 
+-- Create mapping schema if it doesn't exist
+CREATE SCHEMA IF NOT EXISTS mapping;
+
 -- Mapping configuration table for source/target column mapping rules
-CREATE TABLE IF NOT EXISTS staging.mapping_config (
+CREATE TABLE IF NOT EXISTS mapping.mapping_config (
 	id BIGSERIAL PRIMARY KEY,
 	table_source VARCHAR(255) NOT NULL,
 	table_target VARCHAR(255) NOT NULL,

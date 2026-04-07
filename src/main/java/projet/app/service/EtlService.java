@@ -4,29 +4,34 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import projet.app.dto.ColumnMeta;
 import projet.app.dto.DbConnectionRequest;
 import projet.app.dto.IngestionType;
 import projet.app.dto.LoadFromDbRequest;
 import projet.app.dto.LoadFromDbResponse;
 import projet.app.dto.LoadRequest;
+import projet.app.dto.SourceTableDetailsResponse;
 import projet.app.entity.staging.MappingConfig;
 import projet.app.service.connector.ConnectorFactory;
 import projet.app.service.connector.DynamicConnectionFactory;
 import projet.app.service.mapping.MappingConfigService;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * ETL service for database-to-database ingestion driven by staging.mapping_config.
+ * ETL service for database-to-database ingestion driven by mapping.mapping_config.
  */
 @Slf4j
 @Service
@@ -41,10 +46,56 @@ public class EtlService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final Pattern TABLE_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)?$");
     private static final Pattern COLUMN_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*$");
+    private static final Pattern SCHEMA_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*$");
 
     private static final String TARGET_TIERS = "staging.stg_tiers_raw";
     private static final String TARGET_CONTRAT = "staging.stg_contrat_raw";
     private static final String TARGET_COMPTA = "staging.stg_compta_raw";
+
+    public List<SourceTableDetailsResponse> getSourceTablesWithColumns(DbConnectionRequest request) {
+        validateConnectionRequest(request);
+        String schemaFilter = normalizeSchemaFilter(request.getSchema());
+
+        try (Connection connection = dynamicConnectionFactory.createConnection(request)) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            List<SourceTableDetailsResponse> tables = new ArrayList<>();
+
+            try (ResultSet tableRs = metaData.getTables(connection.getCatalog(), schemaFilter, "%", new String[]{"TABLE"})) {
+                while (tableRs.next()) {
+                    String schema = tableRs.getString("TABLE_SCHEM");
+                    String tableName = tableRs.getString("TABLE_NAME");
+
+                    if (schemaFilter == null && isSystemSchema(schema)) {
+                        continue;
+                    }
+
+                    List<ColumnMeta> columns = new ArrayList<>();
+                    try (ResultSet columnRs = metaData.getColumns(connection.getCatalog(), schema, tableName, "%")) {
+                        while (columnRs.next()) {
+                            String nullable = columnRs.getString("IS_NULLABLE");
+                            columns.add(new ColumnMeta(
+                                    columnRs.getString("COLUMN_NAME"),
+                                    columnRs.getString("TYPE_NAME"),
+                                    "YES".equalsIgnoreCase(nullable)
+                            ));
+                        }
+                    }
+
+                    tables.add(SourceTableDetailsResponse.builder()
+                            .schema(schema)
+                            .tableName(tableName)
+                            .qualifiedTable(buildQualifiedTable(schema, tableName))
+                            .columns(columns)
+                            .build());
+                }
+            }
+
+            tables.sort(Comparator.comparing(SourceTableDetailsResponse::getQualifiedTable, String.CASE_INSENSITIVE_ORDER));
+            return tables;
+        } catch (SQLException e) {
+            throw new IllegalArgumentException("Failed to fetch source tables and columns", e);
+        }
+    }
 
     public LoadFromDbResponse loadFromDatabase(LoadFromDbRequest request) {
         validateLoadRequest(request);
@@ -195,6 +246,9 @@ public class EtlService {
         if (request.getPort() <= 0 || request.getPort() > 65535) {
             throw new IllegalArgumentException("Invalid port");
         }
+        if (!isBlank(request.getSchema()) && !SCHEMA_NAME_PATTERN.matcher(request.getSchema().trim()).matches()) {
+            throw new IllegalArgumentException("Invalid schema name");
+        }
     }
 
     private void validateDateForComptaIfNeeded(String dateBal, Map<String, TableLoadPlan> plansByTarget) {
@@ -289,6 +343,36 @@ public class EtlService {
         requireTableName(tableName, "target table");
         Long result = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
         return result == null ? 0L : result;
+    }
+
+    private String buildQualifiedTable(String schema, String tableName) {
+        if (isBlank(schema)) {
+            return tableName;
+        }
+        return schema + "." + tableName;
+    }
+
+    private String normalizeSchemaFilter(String schema) {
+        if (isBlank(schema)) {
+            return null;
+        }
+        return schema.trim();
+    }
+
+    private boolean isSystemSchema(String schema) {
+        if (isBlank(schema)) {
+            return false;
+        }
+
+        String value = schema.toLowerCase();
+        return value.startsWith("pg_")
+                || "information_schema".equals(value)
+                || "mysql".equals(value)
+                || "performance_schema".equals(value)
+                || "sys".equals(value)
+                || "system".equals(value)
+                || "xdb".equals(value)
+                || "sysaux".equals(value);
     }
 
     private boolean isBlank(String value) {
