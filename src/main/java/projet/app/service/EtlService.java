@@ -484,7 +484,7 @@ public class EtlService {
             """);
 
         jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS staging_tiers (
+            CREATE TABLE IF NOT EXISTS staging.staging_tiers (
                 id BIGSERIAL PRIMARY KEY,
                 idtiers TEXT,
                 nomprenom TEXT,
@@ -503,7 +503,7 @@ public class EtlService {
             """);
 
         jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS staging_contrat (
+            CREATE TABLE IF NOT EXISTS staging.staging_contrat (
                 id BIGSERIAL PRIMARY KEY,
                 idcontrat TEXT,
                 agence TEXT,
@@ -520,7 +520,7 @@ public class EtlService {
             """);
 
         jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS staging_compta (
+            CREATE TABLE IF NOT EXISTS staging.staging_compta (
                 id BIGSERIAL PRIMARY KEY,
                 agence TEXT,
                 devise TEXT,

@@ -17,7 +17,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 public class AppApplication {
-
 	public static void main(String[] args) {
 		// Increase POI byte array limit for large Excel files (200MB)
 		IOUtils.setByteArrayMaxOverride(200_000_000);
@@ -29,4 +28,3 @@ public class AppApplication {
 	}
 
 }
-
