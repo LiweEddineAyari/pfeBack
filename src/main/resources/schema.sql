@@ -16,3 +16,15 @@ CREATE TABLE IF NOT EXISTS mapping.mapping_config (
 	column_target VARCHAR(255) NOT NULL,
 	configgroupnumber INTEGER NOT NULL
 );
+
+-- Parameterized formula configuration table (AST JSON driven SQL engine)
+CREATE TABLE IF NOT EXISTS mapping.parameters_config (
+	id BIGSERIAL PRIMARY KEY,
+	code VARCHAR(50) UNIQUE NOT NULL,
+	label VARCHAR(255) NOT NULL,
+	formula_json JSONB NULL,
+	version INT DEFAULT 1,
+	is_active BOOLEAN DEFAULT TRUE,
+	created_at TIMESTAMP DEFAULT NOW(),
+	updated_at TIMESTAMP DEFAULT NOW()
+);
