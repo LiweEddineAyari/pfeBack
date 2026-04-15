@@ -9,12 +9,14 @@ import projet.app.engine.ast.FilterConditionNode;
 import projet.app.engine.ast.FilterGroupNode;
 import projet.app.engine.ast.FormulaDefinition;
 import projet.app.engine.ast.FormulaNode;
+import projet.app.engine.ast.OrderByNode;
 import projet.app.engine.ast.ValueNode;
 import projet.app.engine.enums.AggregationFunction;
 import projet.app.engine.enums.ArithmeticOperator;
 import projet.app.engine.enums.FilterLogic;
 import projet.app.engine.enums.FilterOperator;
 import projet.app.engine.enums.FormulaNodeType;
+import projet.app.engine.enums.SortDirection;
 import projet.app.exception.FormulaValidationException;
 
 import java.util.ArrayList;
@@ -31,11 +33,17 @@ public class FormulaParser {
         FormulaNode expression;
         FilterGroupNode whereFilter = null;
         List<String> groupBy = List.of();
+        List<OrderByNode> orderBy = List.of();
+        Integer limit = null;
+        Integer top = null;
 
         if (formulaJson.isObject() && formulaJson.has("expression") && !formulaJson.has("type")) {
             expression = parseExpression(formulaJson.get("expression"), "expression");
             whereFilter = parseOptionalTopFilter(formulaJson);
             groupBy = parseOptionalGroupBy(formulaJson);
+            orderBy = parseOptionalOrderBy(formulaJson);
+            limit = parseOptionalInteger(formulaJson, "limit");
+            top = parseOptionalInteger(formulaJson, "top");
         } else {
             expression = parseExpression(formulaJson, "root");
             if (formulaJson.isObject()) {
@@ -45,10 +53,13 @@ public class FormulaParser {
                     whereFilter = parseFilterGroupFlexible(formulaJson.get("filter"), "filter");
                 }
                 groupBy = parseOptionalGroupBy(formulaJson);
+                orderBy = parseOptionalOrderBy(formulaJson);
+                limit = parseOptionalInteger(formulaJson, "limit");
+                top = parseOptionalInteger(formulaJson, "top");
             }
         }
 
-        return new FormulaDefinition(expression, whereFilter, groupBy);
+        return new FormulaDefinition(expression, whereFilter, groupBy, orderBy, limit, top);
     }
 
     private FilterGroupNode parseOptionalTopFilter(JsonNode rootNode) {
@@ -124,6 +135,61 @@ public class FormulaParser {
             groupByFields.add(item.asText().trim());
         }
         return groupByFields;
+    }
+
+    private List<OrderByNode> parseOptionalOrderBy(JsonNode rootNode) {
+        if (!rootNode.has("orderBy")) {
+            return List.of();
+        }
+
+        JsonNode orderByNode = rootNode.get("orderBy");
+        if (!orderByNode.isArray()) {
+            throw new FormulaValidationException(List.of("orderBy must be an array"));
+        }
+
+        List<OrderByNode> orderByItems = new ArrayList<>();
+        for (int i = 0; i < orderByNode.size(); i++) {
+            JsonNode item = orderByNode.get(i);
+            String itemPath = "orderBy[" + i + "]";
+
+            if (item.isTextual()) {
+                if (item.asText().isBlank()) {
+                    throw new FormulaValidationException(List.of(itemPath + " must be a non-empty string"));
+                }
+                orderByItems.add(new OrderByNode(item.asText().trim(), SortDirection.ASC));
+                continue;
+            }
+
+            if (!item.isObject()) {
+                throw new FormulaValidationException(List.of(itemPath + " must be a string or object"));
+            }
+
+            String field = readRequiredText(item, "field", itemPath + ".field");
+            SortDirection direction = item.has("direction")
+                    ? SortDirection.from(readRequiredText(item, "direction", itemPath + ".direction"))
+                    : SortDirection.ASC;
+
+            orderByItems.add(new OrderByNode(field, direction));
+        }
+        return orderByItems;
+    }
+
+    private Integer parseOptionalInteger(JsonNode rootNode, String fieldName) {
+        if (!rootNode.has(fieldName)) {
+            return null;
+        }
+
+        JsonNode valueNode = rootNode.get(fieldName);
+        if (!valueNode.isIntegralNumber()) {
+            throw new FormulaValidationException(List.of(fieldName + " must be an integer"));
+        }
+
+        long value = valueNode.longValue();
+        if (value > Integer.MAX_VALUE || value < Integer.MIN_VALUE) {
+            throw new FormulaValidationException(List.of(fieldName + " is out of integer range"));
+        }
+
+        return (int) value;
     }
 
     private BinaryOperationNode parseBinaryNode(JsonNode node, FormulaNodeType type, String path) {

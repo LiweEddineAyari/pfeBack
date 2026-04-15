@@ -9,12 +9,14 @@ import projet.app.engine.ast.FilterConditionNode;
 import projet.app.engine.ast.FilterGroupNode;
 import projet.app.engine.ast.FormulaDefinition;
 import projet.app.engine.ast.FormulaNode;
+import projet.app.engine.ast.OrderByNode;
 import projet.app.engine.ast.ValueNode;
 import projet.app.engine.enums.AggregationFunction;
 import projet.app.engine.enums.ArithmeticOperator;
 import projet.app.engine.enums.FilterOperator;
 import projet.app.engine.enums.FormulaValueType;
 import projet.app.engine.parser.FormulaParser;
+import projet.app.engine.registry.FieldDefinition;
 import projet.app.engine.registry.FieldRegistry;
 import projet.app.exception.FormulaValidationException;
 
@@ -51,6 +53,8 @@ public class FormulaValidationService {
                 errors.add("groupBy[" + i + "]: unknown field " + groupByField);
             }
         }
+
+        validateOrderByAndPaging(formulaDefinition, errors);
 
         if (!errors.isEmpty()) {
             throw new FormulaValidationException(errors);
@@ -270,5 +274,67 @@ public class FormulaValidationService {
             return FormulaValueType.BOOLEAN;
         }
         return FormulaValueType.STRING;
+    }
+
+    private void validateOrderByAndPaging(FormulaDefinition definition, List<String> errors) {
+        List<OrderByNode> orderBy = definition.orderBy();
+        List<String> groupByFields = definition.groupByFields();
+
+        for (int i = 0; i < orderBy.size(); i++) {
+            OrderByNode orderByNode = orderBy.get(i);
+            String orderField = orderByNode.field();
+
+            if (isValueAlias(orderField)) {
+                continue;
+            }
+
+            if (!fieldRegistry.exists(orderField)) {
+                errors.add("orderBy[" + i + "]: unknown field " + orderField);
+                continue;
+            }
+
+            FieldDefinition orderFieldDefinition = fieldRegistry.resolve(orderField);
+
+            if (!groupByFields.isEmpty() && !containsEquivalentGroupByField(groupByFields, orderFieldDefinition.fieldName())) {
+                errors.add("orderBy[" + i + "]: field " + orderField + " must also be present in groupBy when grouping is used");
+            }
+        }
+
+        Integer limit = definition.limit();
+        Integer top = definition.top();
+
+        if (limit != null && top != null) {
+            errors.add("limit and top cannot both be defined");
+        }
+
+        if (limit != null && limit <= 0) {
+            errors.add("limit must be a positive integer");
+        }
+
+        if (top != null && top <= 0) {
+            errors.add("top must be a positive integer");
+        }
+
+        if ((limit != null || top != null) && orderBy.isEmpty()) {
+            errors.add("orderBy is required when limit or top is provided");
+        }
+    }
+
+    private boolean containsEquivalentGroupByField(List<String> groupByFields, String targetCanonicalField) {
+        for (String groupByField : groupByFields) {
+            if (!fieldRegistry.exists(groupByField)) {
+                continue;
+            }
+
+            FieldDefinition groupByDefinition = fieldRegistry.resolve(groupByField);
+            if (groupByDefinition.fieldName().equalsIgnoreCase(targetCanonicalField)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isValueAlias(String field) {
+        return field != null && "value".equalsIgnoreCase(field.trim());
     }
 }

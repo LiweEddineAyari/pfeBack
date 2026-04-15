@@ -104,8 +104,11 @@ public class FormulaEngineService {
                 .sql(compiledSql.sql())
                 .parameters(compiledSql.parameters())
                 .referencedFields(compiledSql.referencedFields())
-            .joins(compiledSql.joins())
-            .groupByFields(compiledSql.groupByFields())
+                .joins(compiledSql.joins())
+                .groupByFields(compiledSql.groupByFields())
+                .orderBy(compiledSql.orderBy())
+                .limit(compiledSql.limit())
+                .top(compiledSql.top())
                 .build();
     }
 
@@ -118,7 +121,7 @@ public class FormulaEngineService {
         CompiledSql compiledSql = sqlCompilerService.compile(definition);
 
         Object result;
-        if (compiledSql.groupByFields() != null && !compiledSql.groupByFields().isEmpty()) {
+        if (shouldReturnRows(compiledSql)) {
             result = jdbcTemplate.queryForList(compiledSql.sql(), compiledSql.parameters().toArray());
         } else {
             result = jdbcTemplate.queryForObject(compiledSql.sql(), Object.class, compiledSql.parameters().toArray());
@@ -126,8 +129,8 @@ public class FormulaEngineService {
 
         return FormulaExecutionResponseDTO.builder()
                 .code(code)
-            .sql(compiledSql.sql())
-            .parameters(compiledSql.parameters())
+                .sql(compiledSql.sql())
+                .parameters(compiledSql.parameters())
                 .value(result)
                 .build();
     }
@@ -142,6 +145,12 @@ public class FormulaEngineService {
     private JsonNode normalizeAndValidate(JsonNode formulaNode) {
         validationService.validateAndParse(formulaNode);
         return formulaNode;
+    }
+
+    private boolean shouldReturnRows(CompiledSql compiledSql) {
+        return (compiledSql.groupByFields() != null && !compiledSql.groupByFields().isEmpty())
+                || compiledSql.limit() != null
+                || compiledSql.top() != null;
     }
 
     private ParameterConfigResponseDTO toResponse(ParameterConfig entity) {

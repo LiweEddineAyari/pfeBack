@@ -2,6 +2,7 @@ package projet.app.engine.compiler;
 
 import org.springframework.stereotype.Component;
 import projet.app.engine.ast.FormulaDefinition;
+import projet.app.engine.ast.OrderByNode;
 import projet.app.engine.registry.FieldRegistry;
 import projet.app.engine.registry.JoinResolution;
 
@@ -45,11 +46,27 @@ public class FormulaSqlCompiler {
             groupBySqlExpressions.add(fieldRegistry.toSqlExpression(field));
         }
 
+        List<String> orderBySqlExpressions = new ArrayList<>();
+        for (OrderByNode orderByNode : definition.orderBy()) {
+            if ("value".equalsIgnoreCase(orderByNode.field())) {
+                orderBySqlExpressions.add("value " + orderByNode.direction().name());
+                continue;
+            }
+
+            var field = fieldRegistry.resolve(orderByNode.field());
+            context.addReferencedField(field.fieldName());
+            orderBySqlExpressions.add(fieldRegistry.toSqlExpression(field) + " " + orderByNode.direction().name());
+        }
+
+        Integer rowLimit = definition.limit() != null ? definition.limit() : definition.top();
+
         String sql = sqlQueryBuilder.build(
                 expression.sql(),
                 joins.joinClauses(),
                 where.sql(),
-                groupBySqlExpressions
+                groupBySqlExpressions,
+                orderBySqlExpressions,
+                rowLimit
         );
 
         return new CompiledSql(
@@ -57,7 +74,10 @@ public class FormulaSqlCompiler {
                 context.getParameters(),
                 context.getReferencedFields(),
                 joins.joinClauses(),
-                definition.groupByFields()
+                definition.groupByFields(),
+                definition.orderBy(),
+                definition.limit(),
+                definition.top()
         );
     }
 }

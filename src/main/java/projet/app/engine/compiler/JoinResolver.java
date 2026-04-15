@@ -29,24 +29,40 @@ public class JoinResolver {
     }
 
     public JoinResolution resolve(FormulaDefinition definition) {
-        Set<String> joinKeys = new LinkedHashSet<>();
+        Set<String> requiredJoinKeys = new LinkedHashSet<>();
 
-        collectFromExpression(definition.expression(), joinKeys);
+        collectFromExpression(definition.expression(), requiredJoinKeys);
 
         if (definition.whereFilter() != null) {
-            collectFromFilter(definition.whereFilter(), joinKeys);
+            collectFromFilter(definition.whereFilter(), requiredJoinKeys);
         }
 
         for (String groupByField : definition.groupByFields()) {
             FieldDefinition fieldDefinition = fieldRegistry.resolve(groupByField);
             if (fieldDefinition.joinKey() != null) {
-                joinKeys.add(fieldDefinition.joinKey());
+                requiredJoinKeys.add(fieldDefinition.joinKey());
             }
+        }
+
+        definition.orderBy().forEach(orderByNode -> {
+            if ("value".equalsIgnoreCase(orderByNode.field())) {
+                return;
+            }
+
+            FieldDefinition fieldDefinition = fieldRegistry.resolve(orderByNode.field());
+            if (fieldDefinition.joinKey() != null) {
+                requiredJoinKeys.add(fieldDefinition.joinKey());
+            }
+        });
+
+        Set<String> expandedJoinKeys = new LinkedHashSet<>();
+        for (String joinKey : requiredJoinKeys) {
+            expandJoinKey(joinKey, expandedJoinKeys, new LinkedHashSet<>());
         }
 
         Set<String> clauses = new LinkedHashSet<>();
         Set<String> aliases = new LinkedHashSet<>();
-        for (String joinKey : joinKeys) {
+        for (String joinKey : expandedJoinKeys) {
             JoinDefinition joinDefinition = joinCatalog.getRequired(joinKey);
             clauses.add(joinDefinition.clause());
             aliases.add(joinDefinition.alias());
@@ -98,5 +114,22 @@ public class JoinResolver {
         for (FilterGroupNode nestedGroup : group.groups()) {
             collectFromFilter(nestedGroup, joinKeys);
         }
+    }
+
+    private void expandJoinKey(String joinKey, Set<String> orderedKeys, Set<String> visiting) {
+        if (joinKey == null || orderedKeys.contains(joinKey)) {
+            return;
+        }
+        if (!visiting.add(joinKey)) {
+            throw new IllegalStateException("Cyclic join dependency detected for key: " + joinKey);
+        }
+
+        JoinDefinition definition = joinCatalog.getRequired(joinKey);
+        for (String dependency : definition.dependsOn()) {
+            expandJoinKey(dependency, orderedKeys, visiting);
+        }
+
+        visiting.remove(joinKey);
+        orderedKeys.add(joinKey);
     }
 }

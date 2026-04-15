@@ -36,36 +36,36 @@ public class FieldRegistry {
         add(catalog, "amount", "amount", "f", null, FieldDataType.NUMBER);
         add(catalog, "actif", "actif", "f", null, FieldDataType.NUMBER);
 
-        // dim_client (join key CLIENT)
-        add(catalog, "dimClient.idtiers", "idtiers", "cl", "CLIENT", FieldDataType.TEXT);
-        add(catalog, "dimClient.idResidence", "id_residence", "cl", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "dimClient.idAgenteco", "id_agenteco", "cl", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "dimClient.idDouteux", "id_douteux", "cl", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "dimClient.idGrpaffaire", "id_grpaffaire", "cl", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "dimClient.idSectionactivite", "id_sectionactivite", "cl", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "dimClient.nomprenom", "nomprenom", "cl", "CLIENT", FieldDataType.TEXT);
-        add(catalog, "dimClient.raisonsoc", "raisonsoc", "cl", "CLIENT", FieldDataType.TEXT);
-        add(catalog, "dimClient.chiffreaffaires", "chiffreaffaires", "cl", "CLIENT", FieldDataType.TEXT);
+        // dim_client (base dim join)
+        add(catalog, "dimClient.idtiers", "idtiers", "cl", "DIM_CLIENT", FieldDataType.TEXT);
+        add(catalog, "dimClient.idResidence", "id_residence", "cl", "DIM_CLIENT", FieldDataType.NUMBER);
+        add(catalog, "dimClient.idAgenteco", "id_agenteco", "cl", "DIM_CLIENT", FieldDataType.NUMBER);
+        add(catalog, "dimClient.idDouteux", "id_douteux", "cl", "DIM_CLIENT", FieldDataType.NUMBER);
+        add(catalog, "dimClient.idGrpaffaire", "id_grpaffaire", "cl", "DIM_CLIENT", FieldDataType.NUMBER);
+        add(catalog, "dimClient.idSectionactivite", "id_sectionactivite", "cl", "DIM_CLIENT", FieldDataType.NUMBER);
+        add(catalog, "dimClient.nomprenom", "nomprenom", "cl", "DIM_CLIENT", FieldDataType.TEXT);
+        add(catalog, "dimClient.raisonsoc", "raisonsoc", "cl", "DIM_CLIENT", FieldDataType.TEXT);
+        add(catalog, "dimClient.chiffreaffaires", "chiffreaffaires", "cl", "DIM_CLIENT", FieldDataType.TEXT);
 
-        // dim_contrat (join key CONTRAT)
-        add(catalog, "dimContrat.id", "id", "dc", "CONTRAT", FieldDataType.TEXT);
-        add(catalog, "dimContrat.idClient", "id_client", "dc", "CONTRAT", FieldDataType.TEXT);
-        add(catalog, "dimContrat.idAgence", "id_agence", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.idDevise", "id_devise", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.idObjetfinance", "id_objetfinance", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.idTypcontrat", "id_typcontrat", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.idDateouverture", "id_dateouverture", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.idDateecheance", "id_dateecheance", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.ancienneteimpaye", "ancienneteimpaye", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.tauxcontrat", "tauxcontrat", "dc", "CONTRAT", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.actif", "actif", "dc", "CONTRAT", FieldDataType.NUMBER);
+        // dim_contrat (base dim join)
+        add(catalog, "dimContrat.id", "id", "dc", "DIM_CONTRAT", FieldDataType.TEXT);
+        add(catalog, "dimContrat.idClient", "id_client", "dc", "DIM_CONTRAT", FieldDataType.TEXT);
+        add(catalog, "dimContrat.idAgence", "id_agence", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.idDevise", "id_devise", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.idObjetfinance", "id_objetfinance", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.idTypcontrat", "id_typcontrat", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.idDateouverture", "id_dateouverture", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.idDateecheance", "id_dateecheance", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.ancienneteimpaye", "ancienneteimpaye", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.tauxcontrat", "tauxcontrat", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.actif", "actif", "dc", "DIM_CONTRAT", FieldDataType.NUMBER);
 
         // sub_dim_agence
         add(catalog, "subDimAgence.numagence", "numagence", "agf", "FACT_AGENCE", FieldDataType.NUMBER);
-        add(catalog, "dimContrat.subDimAgence.numagence", "numagence", "agc", "CONTRAT", FieldDataType.NUMBER);
+        add(catalog, "dimContrat.subDimAgence.numagence", "numagence", "agc", "CONTRAT_AGENCE", FieldDataType.NUMBER);
 
         // sub_dim_agenteco
-        add(catalog, "subDimAgenteco.libelle", "libelle", "aec", "CLIENT", FieldDataType.TEXT);
+        add(catalog, "subDimAgenteco.libelle", "libelle", "aec", "CLIENT_AGENTECO", FieldDataType.TEXT);
 
         // sub_dim_chapitre
         add(catalog, "subDimChapitre.chapitre", "chapitre", "ch", "CHAPITRE", FieldDataType.NUMBER);
@@ -76,34 +76,34 @@ public class FieldRegistry {
 
         // sub_dim_date
         add(catalog, "subDimDate.dateValue", "date_value", "dtf", "FACT_DATE", FieldDataType.DATE);
-        add(catalog, "dimContrat.subDimDateOuverture.dateValue", "date_value", "dto", "CONTRAT", FieldDataType.DATE);
-        add(catalog, "dimContrat.subDimDateEcheance.dateValue", "date_value", "dte", "CONTRAT", FieldDataType.DATE);
+        add(catalog, "dimContrat.subDimDateOuverture.dateValue", "date_value", "dto", "CONTRAT_DATE_OUVERTURE", FieldDataType.DATE);
+        add(catalog, "dimContrat.subDimDateEcheance.dateValue", "date_value", "dte", "CONTRAT_DATE_ECHEANCE", FieldDataType.DATE);
 
         // sub_dim_devise
         add(catalog, "subDimDevise.devise", "devise", "dvf", "FACT_DEVISE", FieldDataType.TEXT);
         add(catalog, "subDimDeviseBnq.devise", "devise", "dvb", "FACT_DEVISE_BNQ", FieldDataType.TEXT);
-        add(catalog, "dimContrat.subDimDevise.devise", "devise", "dvc", "CONTRAT", FieldDataType.TEXT);
+        add(catalog, "dimContrat.subDimDevise.devise", "devise", "dvc", "CONTRAT_DEVISE", FieldDataType.TEXT);
 
         // sub_dim_douteux
-        add(catalog, "subDimDouteux.douteux", "douteux", "dout", "CLIENT", FieldDataType.NUMBER);
-        add(catalog, "subDimDouteux.datdouteux", "datdouteux", "dout", "CLIENT", FieldDataType.DATE);
+        add(catalog, "subDimDouteux.douteux", "douteux", "dout", "CLIENT_DOUTEUX", FieldDataType.NUMBER);
+        add(catalog, "subDimDouteux.datdouteux", "datdouteux", "dout", "CLIENT_DOUTEUX", FieldDataType.DATE);
 
         // sub_dim_grpaffaire
-        add(catalog, "subDimGrpaffaire.nomgrpaffaires", "nomgrpaffaires", "gaf", "CLIENT", FieldDataType.TEXT);
+        add(catalog, "subDimGrpaffaire.nomgrpaffaires", "nomgrpaffaires", "gaf", "CLIENT_GRPAFFAIRE", FieldDataType.TEXT);
 
         // sub_dim_objetfinance
-        add(catalog, "dimContrat.subDimObjetfinance.libelle", "libelle", "ofc", "CONTRAT", FieldDataType.TEXT);
+        add(catalog, "dimContrat.subDimObjetfinance.libelle", "libelle", "ofc", "CONTRAT_OBJETFINANCE", FieldDataType.TEXT);
 
         // sub_dim_residence
-        add(catalog, "subDimResidence.pays", "pays", "res", "CLIENT", FieldDataType.TEXT);
-        add(catalog, "subDimResidence.residence", "residence", "res", "CLIENT", FieldDataType.TEXT);
-        add(catalog, "subDimResidence.geo", "geo", "res", "CLIENT", FieldDataType.TEXT);
+        add(catalog, "subDimResidence.pays", "pays", "res", "CLIENT_RESIDENCE", FieldDataType.TEXT);
+        add(catalog, "subDimResidence.residence", "residence", "res", "CLIENT_RESIDENCE", FieldDataType.TEXT);
+        add(catalog, "subDimResidence.geo", "geo", "res", "CLIENT_RESIDENCE", FieldDataType.TEXT);
 
         // sub_dim_sectionactivite
-        add(catalog, "subDimSectionactivite.libelle", "libelle", "sac", "CLIENT", FieldDataType.TEXT);
+        add(catalog, "subDimSectionactivite.libelle", "libelle", "sac", "CLIENT_SECTIONACTIVITE", FieldDataType.TEXT);
 
         // sub_dim_typcontrat
-        add(catalog, "dimContrat.subDimTypcontrat.typcontrat", "typcontrat", "tyc", "CONTRAT", FieldDataType.TEXT);
+        add(catalog, "dimContrat.subDimTypcontrat.typcontrat", "typcontrat", "tyc", "CONTRAT_TYPCONTRAT", FieldDataType.TEXT);
 
         // Existing short aliases kept for compatibility
         alias(catalog, "numcompte", "subDimCompte.numcompte");

@@ -1,290 +1,113 @@
-2026-04-14 15:41:22 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 22516 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 15:41:22 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 15:41:22 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 15:41:23 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 15:41:23 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 64 ms. Found 8 JPA repository interfaces.
-2026-04-14 15:41:23 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 15:41:23 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 15:41:23 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 15:41:24 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 15:41:24 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1794 ms
-2026-04-14 15:41:24 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 15:41:24 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@8fd91d1
-2026-04-14 15:41:24 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 15:41:24 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 15:41:24 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 15:41:24 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 15:41:25 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 15:41:25 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 15:41:26 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 15:41:26 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 15:41:27 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 15:41:27 [main] INFO  projet.app.AppApplication - Started AppApplication in 5.237 seconds (process running for 5.729)
-2026-04-14 15:43:00 [http-nio-8081-exec-2] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 15:43:00 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 15:43:00 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 15:46:41 [http-nio-8081-exec-8] WARN  o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 0, SQLState: 42804
-2026-04-14 15:46:41 [http-nio-8081-exec-8] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ERREUR: la colonne « formula_json » est de type jsonb mais l'expression est de type character varying
-  Indice : Vous devez réécrire l'expression ou lui appliquer une transformation de type.
-  Position : 119
-2026-04-14 16:18:27 [http-nio-8081-exec-10] WARN  o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 0, SQLState: 42804
-2026-04-14 16:18:27 [http-nio-8081-exec-10] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ERREUR: la colonne « formula_json » est de type jsonb mais l'expression est de type character varying
-  Indice : Vous devez réécrire l'expression ou lui appliquer une transformation de type.
-  Position : 119
-2026-04-14 16:23:25 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 11592 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 16:23:25 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 16:23:25 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 16:23:25 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 16:23:25 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 47 ms. Found 8 JPA repository interfaces.
-2026-04-14 16:23:26 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 16:23:26 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 16:23:26 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 16:23:26 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 16:23:26 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1052 ms
-2026-04-14 16:23:26 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 16:23:26 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@2efd2f21
-2026-04-14 16:23:26 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 16:23:26 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 16:23:26 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 16:23:26 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 16:23:26 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 16:23:26 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 16:23:27 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 16:23:27 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 16:23:28 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 16:23:28 [main] INFO  projet.app.AppApplication - Started AppApplication in 3.435 seconds (process running for 3.7)
-2026-04-14 16:23:49 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 16:23:49 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 16:23:49 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 16:37:37 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 18532 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 16:37:37 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 16:37:37 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 16:37:38 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 16:37:38 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 52 ms. Found 8 JPA repository interfaces.
-2026-04-14 16:37:38 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 16:37:38 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 16:37:38 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 16:37:38 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 16:37:38 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 738 ms
-2026-04-14 16:37:38 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 16:37:39 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@50110971
-2026-04-14 16:37:39 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 16:37:39 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 16:37:39 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 16:37:39 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 16:37:39 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 16:37:39 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 16:37:39 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 16:37:39 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 16:37:40 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 16:37:40 [main] INFO  projet.app.AppApplication - Started AppApplication in 2.818 seconds (process running for 3.056)
-2026-04-14 16:40:11 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 16:40:11 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 16:40:11 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 17:41:08 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 23088 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 17:41:08 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 17:41:08 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 17:41:09 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 17:41:09 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 90 ms. Found 8 JPA repository interfaces.
-2026-04-14 17:41:10 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 17:41:10 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 17:41:10 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 17:41:10 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 17:41:10 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1453 ms
-2026-04-14 17:41:10 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 17:41:10 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4b325930
-2026-04-14 17:41:10 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 17:41:10 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 17:41:10 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 17:41:10 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 17:41:11 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 17:41:11 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 17:41:11 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 17:41:11 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 17:41:12 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
-2026-04-14 17:41:12 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 17:41:12 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-04-14 17:41:12 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-04-14 17:41:12 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
-
-Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
-2026-04-14 17:41:12 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
-
-***************************
-APPLICATION FAILED TO START
-***************************
-
-Description:
-
-Web server failed to start. Port 8081 was already in use.
-
-Action:
-
-Identify and stop the process that's listening on port 8081 or configure this application to listen on another port.
-
-2026-04-14 17:43:45 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 10660 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 17:43:45 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 17:43:45 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 17:43:46 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 17:43:46 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 58 ms. Found 8 JPA repository interfaces.
-2026-04-14 17:43:47 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 17:43:47 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 17:43:47 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 17:43:47 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 17:43:47 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1248 ms
-2026-04-14 17:43:47 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 17:43:47 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4b97b3d2
-2026-04-14 17:43:47 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 17:43:47 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 17:43:47 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 17:43:47 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 17:43:47 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 17:43:48 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 17:43:48 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 17:43:48 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 17:43:49 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 17:43:49 [main] INFO  projet.app.AppApplication - Started AppApplication in 4.006 seconds (process running for 4.272)
-2026-04-14 17:43:54 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 17:43:54 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 17:43:54 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 18:17:11 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:17:11 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-04-14 18:17:11 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-04-14 18:17:20 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 17488 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 18:17:20 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 18:17:20 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 18:17:21 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 18:17:21 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 101 ms. Found 8 JPA repository interfaces.
-2026-04-14 18:17:21 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 18:17:21 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 18:17:21 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 18:17:22 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 18:17:22 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1603 ms
-2026-04-14 18:17:22 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 18:17:22 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7af0affa
-2026-04-14 18:17:22 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 18:17:22 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 18:17:22 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 18:17:22 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 18:17:22 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 18:17:22 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 18:17:23 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 18:17:23 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:17:24 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 18:17:24 [main] INFO  projet.app.AppApplication - Started AppApplication in 4.752 seconds (process running for 5.039)
-2026-04-14 18:17:30 [http-nio-8081-exec-2] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 18:17:30 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 18:17:30 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 18:32:09 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 25580 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 18:32:09 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 18:32:09 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 18:32:10 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 18:32:10 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 51 ms. Found 8 JPA repository interfaces.
-2026-04-14 18:32:10 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 18:32:10 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 18:32:10 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 18:32:10 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 18:32:10 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1079 ms
-2026-04-14 18:32:10 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 18:32:11 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@50110971
-2026-04-14 18:32:11 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 18:32:11 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 18:32:11 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 18:32:11 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 18:32:11 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 18:32:11 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 18:32:12 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 18:32:12 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:32:12 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 18:32:12 [main] INFO  projet.app.AppApplication - Started AppApplication in 3.528 seconds (process running for 3.79)
-2026-04-14 18:32:43 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 18:32:43 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 18:32:43 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-04-14 18:40:47 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 19588 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 18:40:47 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 18:40:47 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 18:40:48 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 18:40:48 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 46 ms. Found 8 JPA repository interfaces.
-2026-04-14 18:40:48 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 18:40:48 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 18:40:48 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 18:40:48 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 18:40:48 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 829 ms
-2026-04-14 18:40:48 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 18:40:48 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4bb1b96b
-2026-04-14 18:40:48 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 18:40:48 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 18:40:48 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 18:40:48 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 18:40:49 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 18:40:49 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 18:40:49 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 18:40:49 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:40:50 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 18:40:50 [main] INFO  projet.app.AppApplication - Started AppApplication in 3.046 seconds (process running for 3.319)
-2026-04-14 18:41:21 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-14 18:41:21 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-04-14 18:41:21 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 0 ms
-2026-04-14 18:44:21 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 18624 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 18:44:21 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 18:44:21 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 18:44:21 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 18:44:21 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 72 ms. Found 8 JPA repository interfaces.
-2026-04-14 18:44:22 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 18:44:22 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 18:44:22 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 18:44:22 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 18:44:22 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1357 ms
-2026-04-14 18:44:22 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 18:44:22 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4b325930
-2026-04-14 18:44:22 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 18:44:22 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 18:44:22 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 18:44:22 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 18:44:23 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 18:44:23 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 18:44:23 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 18:44:24 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:44:24 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
-2026-04-14 18:44:24 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:44:24 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-04-14 18:44:24 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-04-14 18:44:24 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
-
-Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
-2026-04-14 18:44:25 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
-
-***************************
-APPLICATION FAILED TO START
-***************************
-
-Description:
-
-Web server failed to start. Port 8081 was already in use.
-
-Action:
-
-Identify and stop the process that's listening on port 8081 or configure this application to listen on another port.
-
-2026-04-14 18:45:05 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 17624 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
-2026-04-14 18:45:05 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-04-14 18:45:05 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
-2026-04-14 18:45:06 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-04-14 18:45:06 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 68 ms. Found 8 JPA repository interfaces.
-2026-04-14 18:45:06 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
-2026-04-14 18:45:06 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-04-14 18:45:06 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-04-14 18:45:06 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-04-14 18:45:06 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1299 ms
-2026-04-14 18:45:06 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-04-14 18:45:07 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@5e002356
-2026-04-14 18:45:07 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-04-14 18:45:07 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-04-14 18:45:07 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-04-14 18:45:07 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-04-14 18:45:07 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-04-14 18:45:07 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-04-14 18:45:08 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-04-14 18:45:08 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-04-14 18:45:09 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
-2026-04-14 18:45:09 [main] INFO  projet.app.AppApplication - Started AppApplication in 4.266 seconds (process running for 4.549)
+2026-04-15 15:24:14 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 17.0.17 with PID 5852 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
+2026-04-15 15:24:14 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-04-15 15:24:14 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
+2026-04-15 15:24:15 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-04-15 15:24:15 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 84 ms. Found 8 JPA repository interfaces.
+2026-04-15 15:24:16 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
+2026-04-15 15:24:16 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-04-15 15:24:16 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-04-15 15:24:17 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-04-15 15:24:17 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 2289 ms
+2026-04-15 15:24:17 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-04-15 15:24:17 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@5d352de0
+2026-04-15 15:24:17 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-04-15 15:24:18 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-04-15 15:24:18 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-04-15 15:24:18 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-04-15 15:24:18 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-04-15 15:24:18 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-04-15 15:24:19 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-04-15 15:24:19 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 15:24:20 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
+2026-04-15 15:24:20 [main] INFO  projet.app.AppApplication - Started AppApplication in 6.083 seconds (process running for 6.932)
+2026-04-15 15:24:39 [http-nio-8081-exec-4] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-04-15 15:24:39 [http-nio-8081-exec-4] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-04-15 15:24:39 [http-nio-8081-exec-4] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2026-04-15 16:00:38 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 12588 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
+2026-04-15 16:00:38 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-04-15 16:00:38 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
+2026-04-15 16:00:38 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-04-15 16:00:38 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 41 ms. Found 8 JPA repository interfaces.
+2026-04-15 16:00:39 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
+2026-04-15 16:00:39 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-04-15 16:00:39 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-04-15 16:00:39 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-04-15 16:00:39 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1066 ms
+2026-04-15 16:00:39 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-04-15 16:00:39 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@6ad179b4
+2026-04-15 16:00:39 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-04-15 16:00:39 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-04-15 16:00:39 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-04-15 16:00:39 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-04-15 16:00:39 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-04-15 16:00:39 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-04-15 16:00:40 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-04-15 16:00:40 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 16:00:41 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
+2026-04-15 16:00:41 [main] INFO  projet.app.AppApplication - Started AppApplication in 3.36 seconds (process running for 3.601)
+2026-04-15 16:06:09 [http-nio-8081-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-04-15 16:06:09 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-04-15 16:06:09 [http-nio-8081-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2026-04-15 17:57:48 [main] INFO  projet.app.AppApplicationTests - Starting AppApplicationTests using Java 17.0.17 with PID 10036 (started by user in C:\Users\user\Desktop\back\app)
+2026-04-15 17:57:48 [main] DEBUG projet.app.AppApplicationTests - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-04-15 17:57:48 [main] INFO  projet.app.AppApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-04-15 17:57:48 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-04-15 17:57:48 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 69 ms. Found 8 JPA repository interfaces.
+2026-04-15 17:57:49 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-04-15 17:57:49 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@6d294ddc
+2026-04-15 17:57:49 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-04-15 17:57:49 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-04-15 17:57:49 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-04-15 17:57:49 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-04-15 17:57:50 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-04-15 17:57:50 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-04-15 17:57:51 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-04-15 17:57:51 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 17:57:52 [main] INFO  projet.app.AppApplicationTests - Started AppApplicationTests in 4.29 seconds (process running for 5.186)
+2026-04-15 17:57:52 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 17:57:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-04-15 17:57:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-04-15 17:59:50 [main] INFO  projet.app.AppApplicationTests - Starting AppApplicationTests using Java 17.0.17 with PID 10928 (started by user in C:\Users\user\Desktop\back\app)
+2026-04-15 17:59:50 [main] DEBUG projet.app.AppApplicationTests - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-04-15 17:59:50 [main] INFO  projet.app.AppApplicationTests - No active profile set, falling back to 1 default profile: "default"
+2026-04-15 17:59:51 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-04-15 17:59:51 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 58 ms. Found 8 JPA repository interfaces.
+2026-04-15 17:59:51 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-04-15 17:59:52 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3caee3a8
+2026-04-15 17:59:52 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-04-15 17:59:52 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-04-15 17:59:52 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-04-15 17:59:52 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-04-15 17:59:52 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-04-15 17:59:52 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-04-15 17:59:53 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-04-15 17:59:53 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 17:59:54 [main] INFO  projet.app.AppApplicationTests - Started AppApplicationTests in 4.137 seconds (process running for 5.043)
+2026-04-15 17:59:55 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 17:59:55 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-04-15 17:59:55 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-04-15 18:33:13 [main] INFO  projet.app.AppApplication - Starting AppApplication using Java 25.0.2 with PID 18416 (C:\Users\user\Desktop\back\app\target\classes started by user in C:\Users\user\Desktop\back\app)
+2026-04-15 18:33:13 [main] DEBUG projet.app.AppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-04-15 18:33:13 [main] INFO  projet.app.AppApplication - No active profile set, falling back to 1 default profile: "default"
+2026-04-15 18:33:13 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-04-15 18:33:13 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 55 ms. Found 8 JPA repository interfaces.
+2026-04-15 18:33:14 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8081 (http)
+2026-04-15 18:33:14 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-04-15 18:33:14 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-04-15 18:33:14 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-04-15 18:33:14 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1238 ms
+2026-04-15 18:33:14 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-04-15 18:33:14 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@17d2b075
+2026-04-15 18:33:14 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-04-15 18:33:15 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-04-15 18:33:15 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-04-15 18:33:15 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-04-15 18:33:15 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-04-15 18:33:15 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-04-15 18:33:16 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-04-15 18:33:16 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-04-15 18:33:17 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8081 (http) with context path ''
+2026-04-15 18:33:17 [main] INFO  projet.app.AppApplication - Started AppApplication in 4.397 seconds (process running for 4.729)
+2026-04-15 18:33:37 [http-nio-8081-exec-2] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-04-15 18:33:37 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-04-15 18:33:37 [http-nio-8081-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 0 ms

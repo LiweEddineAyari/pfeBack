@@ -2,6 +2,7 @@ package projet.app.dto;
 
 import lombok.Builder;
 import lombok.Data;
+import projet.app.engine.ast.OrderByNode;
 
 import java.util.List;
 import java.util.Set;
@@ -17,4 +18,7 @@ public class FormulaSqlResponseDTO {
     private Set<String> referencedFields;
     private List<String> joins;
     private List<String> groupByFields;
+    private List<OrderByNode> orderBy;
+    private Integer limit;
+    private Integer top;
 }

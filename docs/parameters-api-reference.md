@@ -38,6 +38,72 @@ Notes:
 - Persistence defaults: `version=1`, `createdAt` and `updatedAt` auto-populated.
 - Request contract is DTO-based (`code`, `label`, `formula`, `isActive`). Do not rely on sending DB fields like `id`, `version`, `createdAt`, `updatedAt`.
 
+### 2.1 Request Body Parameter Values (Postman Quick Matrix)
+
+Use this matrix as a checklist when building your JSON body in Postman.
+
+| Parameter path | Required | Type | Possible values | Example value |
+|---|---|---|---|---|
+| `code` | Yes | string | Any non-empty unique code (recommended uppercase letters, numbers, `_`) | `"ENT10"` |
+| `label` | Yes | string | Any non-empty display label | `"Top 10 exposition"` |
+| `isActive` | No | boolean | `true`, `false` | `true` |
+| `formula` | Yes | object | Shape A (wrapper with `expression`) or Shape B (direct expression root) | `{ ... }` |
+| `formula.expression` | Yes | object | Any valid expression node | `{ "type": "AGGREGATION", ... }` |
+| `formula.expression.type` | Yes | string | `FIELD`, `VALUE`, `AGGREGATION`, `ADD`, `SUBTRACT`, `MULTIPLY`, `DIVIDE` | `"AGGREGATION"` |
+| `formula.expression.field` | Conditional | string | Any field from `GET /parameters/supported-fields` | `"soldeconvertie"` |
+| `formula.expression.value` | Conditional | scalar/array | Number, string, boolean, null, or array (depends on node/operator) | `100`, `"EUR"`, `true` |
+| `formula.expression.function` | Conditional | string | `SUM`, `AVG`, `COUNT`, `MIN`, `MAX` | `"SUM"` |
+| `formula.expression.expression` | Conditional | object | Nested expression (used by aggregation or arithmetic) | `{ "type": "FIELD", "field": "amount" }` |
+| `formula.expression.left` | Conditional | object | Expression node (for arithmetic types) | `{ "type": "FIELD", "field": "cumulmvtdb" }` |
+| `formula.expression.right` | Conditional | object | Expression node (for arithmetic types) | `{ "type": "FIELD", "field": "cumulmvtcr" }` |
+| `formula.expression.distinct` | No | boolean | `true`, `false` | `false` |
+| `formula.expression.filters` | No | object/array | Filter group syntax (same rules as `where/filter/filters`) | `{ "logic": "AND", ... }` |
+| `formula.where` | No | object/array | Filter group syntax | `{ "logic": "AND", ... }` |
+| `formula.filter` | No | object/array | Alias of `where` | `{ "conditions": [...] }` |
+| `formula.filters` | No | object/array | Alias of `where` | `[ { "field": "dc.actif", ... } ]` |
+| `formula.where.logic` | No | string | `AND`, `OR` | `"AND"` |
+| `formula.where.conditions[].field` | Conditional | string | Any supported field | `"dc.actif"` |
+| `formula.where.conditions[].operator` | Conditional | string | `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`, `LIKE`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, and enum aliases (`EQ`, `NE`, `GT`, `GTE`, `LT`, `LTE`, `NOT_IN`, `IS_NULL`, `IS_NOT_NULL`) | `"IN"` |
+| `formula.where.conditions[].value` | Conditional | scalar/array | Depends on operator (`IN`/`NOT IN`: non-empty array, `BETWEEN`: 2-value array, others: scalar) | `[1,2]`, `["2026-01-01","2026-12-31"]`, `1` |
+| `formula.groupBy` | No | array of string | Any supported fields | `["idClient"]` |
+| `formula.orderBy` | No | array | Array of strings or objects | `[ { "field": "value", "direction": "DESC" } ]` |
+| `formula.orderBy[].field` | Conditional | string | Any supported field or computed alias `value` | `"value"`, `"idClient"` |
+| `formula.orderBy[].direction` | No | string | `ASC`, `DESC` | `"DESC"` |
+| `formula.limit` | No | integer | Positive integer (`> 0`), requires `orderBy`, cannot be combined with `top` | `10` |
+| `formula.top` | No | integer | Positive integer (`> 0`), requires `orderBy`, cannot be combined with `limit` | `10` |
+
+### 2.2 Copy/Paste Request Template
+
+```json
+{
+  "code": "YOUR_CODE",
+  "label": "Your label",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "where": {
+      "logic": "AND",
+      "conditions": [
+        {
+          "field": "dc.actif",
+          "operator": "=",
+          "value": 1
+        }
+      ]
+    },
+    "groupBy": ["idClient"],
+    "orderBy": [
+      { "field": "value", "direction": "DESC" }
+    ],
+    "top": 10
+  }
+}
+```
+
 ## 3) Formula Object Shapes
 
 The parser accepts 2 root shapes:
@@ -48,7 +114,13 @@ The parser accepts 2 root shapes:
 {
   "expression": { ...expression node... },
   "where": { ...filter group... },
-  "groupBy": ["field1", "field2"]
+  "groupBy": ["field1", "field2"],
+  "orderBy": [
+    {"field": "field1", "direction": "ASC"},
+    {"field": "value", "direction": "DESC"}
+  ],
+  "limit": 50,
+  "top": 10
 }
 ```
 
@@ -63,6 +135,7 @@ The parser accepts 2 root shapes:
 ```
 
 In direct shape, optional `where` or `filter` can still be added.
+Optional `groupBy`, `orderBy`, `limit`, and `top` are also supported on direct shape.
 
 ## 4) expression Node Options
 
@@ -217,8 +290,56 @@ Rules:
 
 Behavior:
 - SQL includes `GROUP BY` clause
-- Execute endpoint returns list rows (`queryForList`) when groupBy is present
+- Execute endpoint returns list rows (`queryForList`) when `groupBy`, `limit`, or `top` is present
 - Without groupBy, execute returns scalar (`queryForObject`)
+
+### 6.1) orderBy options
+
+Top-level optional field:
+
+```json
+"orderBy": [
+  {"field": "idAgence", "direction": "ASC"},
+  {"field": "value", "direction": "DESC"}
+]
+```
+
+Rules:
+- Must be an array
+- Each item can be:
+  - a string field name (defaults to `ASC`)
+  - an object with `field` (required) and `direction` (`ASC` or `DESC`, default `ASC`)
+- `field` can be any supported registry field or the computed alias `value`
+- When `groupBy` is used, order fields coming from registry must also be present in `groupBy`
+
+### 6.2) limit options
+
+Top-level optional field:
+
+```json
+"limit": 100
+```
+
+Rules:
+- Must be an integer
+- Must be strictly positive
+- Requires `orderBy` to be provided
+- Cannot be combined with `top`
+
+### 6.3) top options
+
+Top-level optional field:
+
+```json
+"top": 20
+```
+
+Rules:
+- Must be an integer
+- Must be strictly positive
+- Requires `orderBy` to be provided
+- Cannot be combined with `limit`
+- For PostgreSQL runtime, `top` is normalized to SQL `LIMIT` in compiled query
 
 ## 7) Supported Field Options (from FieldRegistry)
 
@@ -368,7 +489,7 @@ This section is exhaustive against the current `FieldRegistry` and now covers fa
 
 Notes:
 - Field matching is case-insensitive (internal normalization to lowercase).
-- Joins are auto-inferred from referenced fields in expression, where/filter, aggregation filters, and groupBy.
+- Joins are auto-inferred from referenced fields in expression, where/filter, aggregation filters, groupBy, and orderBy.
 - Runtime list endpoint: `GET /parameters/supported-fields` returns all currently supported keys from `FieldRegistry`.
 
 ## 8) SQL Generation Behavior
@@ -387,6 +508,9 @@ Notes:
 - WHERE is parameterized (`?`) to avoid raw value interpolation
 - Arithmetic division uses `NULLIF(..., 0)` protection
 - groupBy expressions are selected with generated aliases
+- ORDER BY supports registry fields and computed alias `value`
+- `limit` compiles to SQL `LIMIT n`
+- `top` is accepted in payload and compiled to SQL `LIMIT n` for PostgreSQL compatibility
 
 ## 9) Common API Errors and Causes
 
@@ -430,6 +554,31 @@ This compiles to a query equivalent to:
 - auto join `datamart.dim_contrat dc`
 - filter `dc.actif = ?` with parameter `1`
 
+### 10.1 Ranked grouped example (TOP)
+
+```json
+{
+  "code": "TOP_AGENCE_ENC",
+  "label": "Top agencies by total encours",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "groupBy": ["idAgence"],
+    "orderBy": [
+      {"field": "value", "direction": "DESC"}
+    ],
+    "top": 10
+  }
+}
+```
+
+Compiled SQL tail:
+- `GROUP BY f.id_agence ORDER BY value DESC LIMIT 10`
+
 ## 11) Supported Scenario Matrix
 
 ### 11.1 Fact-only aggregations
@@ -465,3 +614,222 @@ This compiles to a query equivalent to:
 ### 11.8 Grouped outputs
 - Add top-level `groupBy`
 - Execute endpoint returns row list for grouped queries, scalar value for non-grouped queries
+
+### 11.9 Ranked outputs (ORDER BY + LIMIT/TOP)
+- Add top-level `orderBy` with one or more sort expressions
+- Add either `limit` or `top` to restrict row count
+- Use `value` alias to sort by computed aggregate result
+- Typical pattern: grouped aggregate + `ORDER BY value DESC` + `LIMIT/TOP N`
+
+## 12) Postman Testing Cookbook
+
+### 12.1 Postman setup
+
+- Base URL: `http://localhost:8081`
+- Create: `POST /parameters`
+- Update: `PUT /parameters/{code}`
+- Compile SQL: `GET /parameters/{code}/sql`
+- Execute: `POST /parameters/{code}/execute`
+- Headers: `Content-Type: application/json`
+
+Testing flow:
+- Send `POST /parameters` with a payload below.
+- If code already exists, send same payload to `PUT /parameters/{code}`.
+- Verify SQL with `GET /parameters/{code}/sql`.
+- Run query with `POST /parameters/{code}/execute`.
+
+### 12.2 Top N (DESC)
+
+```json
+{
+  "code": "ENT10_TOP_DESC",
+  "label": "Top 10 exposition DESC",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "groupBy": ["idClient"],
+    "orderBy": [
+      { "field": "value", "direction": "DESC" }
+    ],
+    "top": 10
+  }
+}
+```
+
+Expected SQL tail:
+- `GROUP BY f.id_client ORDER BY value DESC LIMIT 10`
+
+### 12.3 Top N (ASC)
+
+```json
+{
+  "code": "ENT10_TOP_ASC",
+  "label": "Top 10 exposition ASC",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "groupBy": ["idClient"],
+    "orderBy": [
+      { "field": "value", "direction": "ASC" }
+    ],
+    "top": 10
+  }
+}
+```
+
+Expected SQL tail:
+- `GROUP BY f.id_client ORDER BY value ASC LIMIT 10`
+
+### 12.4 Limit N (DESC)
+
+```json
+{
+  "code": "ENT10_LIMIT_DESC",
+  "label": "Limit 10 exposition DESC",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "groupBy": ["idClient"],
+    "orderBy": [
+      { "field": "value", "direction": "DESC" }
+    ],
+    "limit": 10
+  }
+}
+```
+
+Expected SQL tail:
+- `GROUP BY f.id_client ORDER BY value DESC LIMIT 10`
+
+### 12.5 Limit N (ASC)
+
+```json
+{
+  "code": "ENT10_LIMIT_ASC",
+  "label": "Limit 10 exposition ASC",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "groupBy": ["idClient"],
+    "orderBy": [
+      { "field": "value", "direction": "ASC" }
+    ],
+    "limit": 10
+  }
+}
+```
+
+Expected SQL tail:
+- `GROUP BY f.id_client ORDER BY value ASC LIMIT 10`
+
+### 12.6 Filter operators quick tests
+
+```json
+{
+  "code": "FILTER_IN_TEST",
+  "label": "Filter IN test",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "where": {
+      "logic": "AND",
+      "conditions": [
+        {
+          "field": "douteux",
+          "operator": "IN",
+          "value": [1, 2]
+        }
+      ]
+    }
+  }
+}
+```
+
+Other operator value examples:
+- `"operator": "BETWEEN", "value": ["2026-01-01", "2026-12-31"]`
+- `"operator": "LIKE", "value": "13%"`
+- `"operator": "IS NULL"`
+- `"operator": "GT", "value": 100`
+
+### 12.7 Arithmetic expression test
+
+```json
+{
+  "code": "ARITH_DIV_TEST",
+  "label": "Arithmetic divide test",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "DIVIDE",
+      "left": {
+        "type": "AGGREGATION",
+        "function": "SUM",
+        "field": "cumulmvtdb"
+      },
+      "right": {
+        "type": "AGGREGATION",
+        "function": "SUM",
+        "field": "cumulmvtcr"
+      }
+    }
+  }
+}
+```
+
+### 12.8 Validation fail examples (expected HTTP 400)
+
+`limit` and `top` together:
+
+```json
+{
+  "code": "BAD_LIMIT_TOP",
+  "label": "Invalid limit top",
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "orderBy": [{ "field": "value", "direction": "DESC" }],
+    "limit": 10,
+    "top": 5
+  }
+}
+```
+
+`top` without `orderBy`:
+
+```json
+{
+  "code": "BAD_TOP_NO_ORDER",
+  "label": "Invalid top without order",
+  "formula": {
+    "expression": {
+      "type": "AGGREGATION",
+      "function": "SUM",
+      "field": "soldeconvertie"
+    },
+    "top": 10
+  }
+}
+```

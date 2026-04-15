@@ -14,7 +14,9 @@ public class SqlQueryBuilder {
             String expressionSql,
             List<String> joins,
             String globalWhereSql,
-            List<String> groupByExpressions
+            List<String> groupByExpressions,
+            List<String> orderByExpressions,
+            Integer rowLimit
     ) {
         StringBuilder builder = new StringBuilder();
 
@@ -43,6 +45,14 @@ public class SqlQueryBuilder {
 
         if (groupByExpressions != null && !groupByExpressions.isEmpty()) {
             builder.append(" GROUP BY ").append(String.join(", ", groupByExpressions));
+        }
+
+        if (orderByExpressions != null && !orderByExpressions.isEmpty()) {
+            builder.append(" ORDER BY ").append(String.join(", ", orderByExpressions));
+        }
+
+        if (rowLimit != null) {
+            builder.append(" LIMIT ").append(rowLimit);
         }
 
         return builder.toString();
