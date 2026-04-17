@@ -7,6 +7,7 @@ import projet.app.dto.FormulaRequestDTO;
 import projet.app.dto.FormulaSqlResponseDTO;
 import projet.app.dto.ParameterConfigResponseDTO;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -39,8 +40,18 @@ public class FormulaService {
     }
 
     @Transactional(readOnly = true)
+    public FormulaSqlResponseDTO compileByCode(String code, LocalDate referenceDate) {
+        return formulaEngineService.compileByCode(code, referenceDate);
+    }
+
+    @Transactional(readOnly = true)
     public FormulaExecutionResponseDTO executeByCode(String code) {
         return formulaEngineService.executeByCode(code);
+    }
+
+    @Transactional(readOnly = true)
+    public FormulaExecutionResponseDTO executeByCode(String code, LocalDate referenceDate) {
+        return formulaEngineService.executeByCode(code, referenceDate);
     }
 
     @Transactional(readOnly = true)

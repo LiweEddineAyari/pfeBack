@@ -45,6 +45,21 @@ public class GlobalExceptionHandler {
                 .build());
     }
 
+    @ExceptionHandler(RatiosConfigNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleRatiosConfigNotFound(
+            RatiosConfigNotFoundException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .message(ex.getMessage())
+                .details(List.of())
+                .path(request.getRequestURI())
+                .build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleBeanValidation(
             MethodArgumentNotValidException ex,

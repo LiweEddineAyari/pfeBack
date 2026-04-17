@@ -6,6 +6,7 @@ import projet.app.engine.ast.OrderByNode;
 import projet.app.engine.registry.FieldRegistry;
 import projet.app.engine.registry.JoinResolution;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,11 +34,16 @@ public class FormulaSqlCompiler {
     }
 
     public CompiledSql compile(FormulaDefinition definition) {
+        return compile(definition, null);
+    }
+
+    public CompiledSql compile(FormulaDefinition definition, LocalDate referenceDate) {
         SqlCompilationContext context = new SqlCompilationContext();
 
         SqlExpression expression = expressionCompiler.compile(definition.expression(), context);
         FilterBuildResult where = filterBuilder.build(definition.whereFilter(), context);
         JoinResolution joins = joinResolver.resolve(definition);
+        List<String> joinClauses = new ArrayList<>(joins.joinClauses());
 
         List<String> groupBySqlExpressions = new ArrayList<>();
         for (String groupByField : definition.groupByFields()) {
@@ -60,10 +66,23 @@ public class FormulaSqlCompiler {
 
         Integer rowLimit = definition.limit() != null ? definition.limit() : definition.top();
 
+        String whereSql = where.sql();
+        if (referenceDate != null) {
+            if (!joinClauses.contains(JoinKey.SUB_DIM_DATE_FACT.getJoinSql())) {
+                joinClauses.add(JoinKey.SUB_DIM_DATE_FACT.getJoinSql());
+            }
+
+            whereSql = (whereSql == null || whereSql.isBlank())
+                    ? "sdatef.date_value = ?"
+                    : "(" + whereSql + ") AND sdatef.date_value = ?";
+
+            context.addParameter(referenceDate);
+        }
+
         String sql = sqlQueryBuilder.build(
                 expression.sql(),
-                joins.joinClauses(),
-                where.sql(),
+            joinClauses,
+            whereSql,
                 groupBySqlExpressions,
                 orderBySqlExpressions,
                 rowLimit
@@ -73,7 +92,7 @@ public class FormulaSqlCompiler {
                 sql,
                 context.getParameters(),
                 context.getReferencedFields(),
-                joins.joinClauses(),
+                joinClauses,
                 definition.groupByFields(),
                 definition.orderBy(),
                 definition.limit(),

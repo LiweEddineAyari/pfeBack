@@ -15,6 +15,7 @@ import projet.app.entity.mapping.ParameterConfig;
 import projet.app.exception.ParameterConfigNotFoundException;
 import projet.app.repository.mapping.ParameterConfigRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -91,12 +92,16 @@ public class FormulaEngineService {
 
     @Transactional(readOnly = true)
     public FormulaSqlResponseDTO compileByCode(String code) {
+        return compileByCode(code, null);
+    }
+
+    @Transactional(readOnly = true)
+    public FormulaSqlResponseDTO compileByCode(String code, LocalDate referenceDate) {
         ParameterConfig config = parameterConfigRepository.findByCodeAndIsActiveTrue(code)
                 .orElseThrow(() -> new ParameterConfigNotFoundException(code));
 
-        JsonNode formulaJson = config.getFormulaJson();
-        FormulaDefinition definition = validationService.validateAndParse(formulaJson);
-        CompiledSql compiledSql = sqlCompilerService.compile(definition);
+        FormulaDefinition definition = validationService.validateAndParse(config.getFormulaJson());
+        CompiledSql compiledSql = compileDefinition(definition, referenceDate);
 
         return FormulaSqlResponseDTO.builder()
                 .code(config.getCode())
@@ -114,11 +119,16 @@ public class FormulaEngineService {
 
     @Transactional(readOnly = true)
     public FormulaExecutionResponseDTO executeByCode(String code) {
+        return executeByCode(code, null);
+    }
+
+    @Transactional(readOnly = true)
+    public FormulaExecutionResponseDTO executeByCode(String code, LocalDate referenceDate) {
         ParameterConfig config = parameterConfigRepository.findByCodeAndIsActiveTrue(code)
             .orElseThrow(() -> new ParameterConfigNotFoundException(code));
 
         FormulaDefinition definition = validationService.validateAndParse(config.getFormulaJson());
-        CompiledSql compiledSql = sqlCompilerService.compile(definition);
+        CompiledSql compiledSql = compileDefinition(definition, referenceDate);
 
         Object result;
         if (shouldReturnRows(compiledSql)) {
@@ -131,6 +141,7 @@ public class FormulaEngineService {
                 .code(code)
                 .sql(compiledSql.sql())
                 .parameters(compiledSql.parameters())
+                .referenceDate(referenceDate)
                 .value(result)
                 .build();
     }
@@ -145,6 +156,13 @@ public class FormulaEngineService {
     private JsonNode normalizeAndValidate(JsonNode formulaNode) {
         validationService.validateAndParse(formulaNode);
         return formulaNode;
+    }
+
+    private CompiledSql compileDefinition(FormulaDefinition definition, LocalDate referenceDate) {
+        if (referenceDate == null) {
+            return sqlCompilerService.compile(definition);
+        }
+        return sqlCompilerService.compile(definition, referenceDate);
     }
 
     private boolean shouldReturnRows(CompiledSql compiledSql) {

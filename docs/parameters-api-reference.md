@@ -19,9 +19,10 @@ Base path: `/parameters`
 - `GET /parameters/{code}`: fetch configuration
 - `GET /parameters/{code}/sql`: compile formula to SQL
 - `POST /parameters/{code}/execute`: execute compiled SQL
+- `POST /parameters/{code}/execute/{date}`: execute compiled SQL on one reference balance date (`YYYY-MM-DD`)
 - `GET /parameters/supported-fields`: list all supported filter/expression fields
 
-Important: execute endpoint is **POST**, not GET.
+Important: execute endpoints are **POST**, not GET.
 
 ## 2) Request Body Contract (POST /parameters)
 
@@ -506,6 +507,7 @@ Notes:
   - `CLIENT` -> `dim_client` plus client-related sub dimensions (`residence`, `agenteco`, `douteux`, `grpaffaire`, `sectionactivite`)
   - `CONTRAT` -> `dim_contrat` plus contract-related sub dimensions (`agence`, `devise`, `objetfinance`, `typcontrat`, `dateouverture`, `dateecheance`)
 - WHERE is parameterized (`?`) to avoid raw value interpolation
+- For `POST /parameters/{code}/execute/{date}`, compiler forces `LEFT JOIN datamart.sub_dim_date sdatef ON f.id_date = sdatef.id` and appends `sdatef.date_value = ?`
 - Arithmetic division uses `NULLIF(..., 0)` protection
 - groupBy expressions are selected with generated aliases
 - ORDER BY supports registry fields and computed alias `value`
@@ -519,6 +521,7 @@ Notes:
 | 400 | `Request validation failed` | Missing `code`, `label`, or `formula` |
 | 400 | `Formula validation failed` | Unknown field, bad operator token, type mismatch, empty filter group, too deep nesting |
 | 400 | `Parameter config already exists for code` | Duplicate code on create |
+| 400 | `Failed to convert value ... to LocalDate` | Invalid date path value for `/parameters/{code}/execute/{date}` (must be `YYYY-MM-DD`) |
 | 404 | `Parameter config not found for code` | Missing or inactive code for compile/execute |
 | 500 | `Request method 'GET' is not supported` | Calling `GET /parameters/{code}/execute` instead of POST |
 
@@ -630,6 +633,7 @@ Compiled SQL tail:
 - Update: `PUT /parameters/{code}`
 - Compile SQL: `GET /parameters/{code}/sql`
 - Execute: `POST /parameters/{code}/execute`
+- Execute at date: `POST /parameters/{code}/execute/{date}`
 - Headers: `Content-Type: application/json`
 
 Testing flow:
@@ -637,6 +641,7 @@ Testing flow:
 - If code already exists, send same payload to `PUT /parameters/{code}`.
 - Verify SQL with `GET /parameters/{code}/sql`.
 - Run query with `POST /parameters/{code}/execute`.
+- Run query for a specific balance date with `POST /parameters/{code}/execute/2026-04-13`.
 
 ### 12.2 Top N (DESC)
 

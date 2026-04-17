@@ -3,6 +3,7 @@ package projet.app.controller;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import projet.app.dto.FormulaSqlResponseDTO;
 import projet.app.dto.ParameterConfigResponseDTO;
 import projet.app.service.mapping.FormulaService;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +58,14 @@ public class ParameterConfigController {
     @PostMapping("/{code}/execute")
     public ResponseEntity<FormulaExecutionResponseDTO> execute(@PathVariable String code) {
         return ResponseEntity.ok(formulaService.executeByCode(code));
+    }
+
+    @PostMapping("/{code}/execute/{date}")
+    public ResponseEntity<FormulaExecutionResponseDTO> executeAtDate(
+            @PathVariable String code,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return ResponseEntity.ok(formulaService.executeByCode(code, date));
     }
 
     @GetMapping("/supported-fields")
