@@ -16,9 +16,7 @@ import lombok.NoArgsConstructor;
         @JsonSubTypes.Type(value = BinaryNode.class, name = "ADD"),
         @JsonSubTypes.Type(value = BinaryNode.class, name = "SUBTRACT"),
         @JsonSubTypes.Type(value = BinaryNode.class, name = "MULTIPLY"),
-    @JsonSubTypes.Type(value = BinaryNode.class, name = "DIVIDE"),
-    @JsonSubTypes.Type(value = AggregateNode.class, name = "AGGREGATE"),
-    @JsonSubTypes.Type(value = FilterNode.class, name = "FILTER")
+        @JsonSubTypes.Type(value = BinaryNode.class, name = "DIVIDE")
 })
 public abstract class ExpressionNode {
 

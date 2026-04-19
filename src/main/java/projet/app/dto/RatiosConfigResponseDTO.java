@@ -13,8 +13,8 @@ public class RatiosConfigResponseDTO {
     private Long id;
     private String code;
     private String label;
-    private String famille;
-    private String categorie;
+    private Long familleId;
+    private Long categorieId;
     private JsonNode formula;
     private Double seuilTolerance;
     private Double seuilAlerte;

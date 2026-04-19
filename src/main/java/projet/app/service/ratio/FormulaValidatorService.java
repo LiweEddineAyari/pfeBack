@@ -2,12 +2,9 @@ package projet.app.service.ratio;
 
 import org.springframework.stereotype.Service;
 import projet.app.exception.FormulaValidationException;
-import projet.app.ratio.formula.AggregateNode;
 import projet.app.ratio.formula.BinaryNode;
 import projet.app.ratio.formula.ConstantNode;
 import projet.app.ratio.formula.ExpressionNode;
-import projet.app.ratio.formula.FilterConditionNode;
-import projet.app.ratio.formula.FilterNode;
 import projet.app.ratio.formula.ParamNode;
 import projet.app.repository.mapping.ParameterConfigRepository;
 
@@ -22,8 +19,6 @@ import java.util.Set;
 public class FormulaValidatorService {
 
     private static final Set<String> BINARY_TYPES = Set.of("ADD", "SUBTRACT", "MULTIPLY", "DIVIDE");
-    private static final Set<String> AGGREGATE_FUNCTIONS = Set.of("SUM", "AVG", "MAX", "MIN", "COUNT");
-    private static final Set<String> FILTER_OPERATORS = Set.of(">", ">=", "<", "<=", "=", "==", "!=", "<>", "GT", "GTE", "LT", "LTE", "EQ", "NE");
     private static final double EPSILON = 1e-12d;
 
     private final ParameterConfigRepository parameterConfigRepository;
@@ -72,16 +67,6 @@ public class FormulaValidatorService {
 
         if (BINARY_TYPES.contains(type)) {
             validateBinaryNode(node, type, path, errors);
-            return;
-        }
-
-        if ("AGGREGATE".equals(type)) {
-            validateAggregateNode(node, path, errors);
-            return;
-        }
-
-        if ("FILTER".equals(type)) {
-            validateFilterNode(node, path, errors);
             return;
         }
 
@@ -144,65 +129,6 @@ public class FormulaValidatorService {
         }
     }
 
-    private void validateAggregateNode(ExpressionNode node, String path, List<String> errors) {
-        if (!(node instanceof AggregateNode aggregateNode)) {
-            errors.add(path + ": AGGREGATE node has invalid structure");
-            return;
-        }
-
-        if (aggregateNode.getFunction() == null || aggregateNode.getFunction().isBlank()) {
-            errors.add(path + ": AGGREGATE.function is required");
-        } else {
-            String function = aggregateNode.getFunction().trim().toUpperCase(Locale.ROOT);
-            if (!AGGREGATE_FUNCTIONS.contains(function)) {
-                errors.add(path + ": unsupported AGGREGATE.function " + aggregateNode.getFunction());
-            }
-        }
-
-        if (aggregateNode.getInput() == null) {
-            errors.add(path + ": AGGREGATE.input is required");
-        } else {
-            validateNode(aggregateNode.getInput(), path + ".input", errors);
-        }
-    }
-
-    private void validateFilterNode(ExpressionNode node, String path, List<String> errors) {
-        if (!(node instanceof FilterNode filterNode)) {
-            errors.add(path + ": FILTER node has invalid structure");
-            return;
-        }
-
-        if (filterNode.getInput() == null) {
-            errors.add(path + ": FILTER.input is required");
-        } else {
-            validateNode(filterNode.getInput(), path + ".input", errors);
-        }
-
-        if (filterNode.getCondition() == null) {
-            errors.add(path + ": FILTER.condition is required");
-            return;
-        }
-
-        FilterConditionNode condition = filterNode.getCondition();
-
-        if (condition.getOperator() == null || condition.getOperator().isBlank()) {
-            errors.add(path + ".condition: operator is required");
-        } else {
-            String operator = condition.getOperator().trim().toUpperCase(Locale.ROOT);
-            if (!FILTER_OPERATORS.contains(operator)) {
-                errors.add(path + ".condition: unsupported operator " + condition.getOperator());
-            }
-        }
-
-        if (condition.getValue() == null) {
-            errors.add(path + ".condition: value is required");
-        }
-
-        if (condition.getExpression() != null) {
-            validateNode(condition.getExpression(), path + ".condition.expression", errors);
-        }
-    }
-
     private void collectParams(ExpressionNode node, Set<String> references) {
         if (node == null) {
             return;
@@ -217,19 +143,6 @@ public class FormulaValidatorService {
         if (BINARY_TYPES.contains(type) && node instanceof BinaryNode binaryNode) {
             collectParams(binaryNode.getLeft(), references);
             collectParams(binaryNode.getRight(), references);
-            return;
-        }
-
-        if ("AGGREGATE".equals(type) && node instanceof AggregateNode aggregateNode) {
-            collectParams(aggregateNode.getInput(), references);
-            return;
-        }
-
-        if ("FILTER".equals(type) && node instanceof FilterNode filterNode) {
-            collectParams(filterNode.getInput(), references);
-            if (filterNode.getCondition() != null) {
-                collectParams(filterNode.getCondition().getExpression(), references);
-            }
         }
     }
 

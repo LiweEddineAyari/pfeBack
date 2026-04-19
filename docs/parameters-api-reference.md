@@ -15,12 +15,31 @@ This document analyzes:
 Base path: `/parameters`
 
 - `POST /parameters`: create parameter configuration
+- `GET /parameters`: list all parameter configurations
+- `GET /parameters/id/{id}`: fetch configuration by id
+- `GET /parameters/code/{code}`: fetch configuration by code (explicit route)
 - `PUT /parameters/{code}`: update configuration by code
-- `GET /parameters/{code}`: fetch configuration
+- `DELETE /parameters/code/{code}`: delete one configuration by code
+- `DELETE /parameters`: delete many configurations by code list
+- `GET /parameters/{code}`: fetch configuration by code (legacy alias)
 - `GET /parameters/{code}/sql`: compile formula to SQL
 - `POST /parameters/{code}/execute`: execute compiled SQL
 - `POST /parameters/{code}/execute/{date}`: execute compiled SQL on one reference balance date (`YYYY-MM-DD`)
 - `GET /parameters/supported-fields`: list all supported filter/expression fields
+
+`GET /parameters/supported-fields` response shape:
+
+```json
+{
+  "fields": ["..."],
+  "fieldsByTable": {
+    "datamart.fact_balance": ["..."],
+    "datamart.dim_client": ["..."],
+    "datamart.dim_contrat": ["..."],
+    "datamart.sub_dim_compte": ["..."]
+  }
+}
+```
 
 Important: execute endpoints are **POST**, not GET.
 
@@ -33,13 +52,42 @@ Important: execute endpoints are **POST**, not GET.
 | `code` | Yes | string | Non-empty (`@NotBlank`), unique in DB, trimmed before save. Persisted to `mapping.parameters_config.code` (length 50). | None |
 | `label` | Yes | string | Non-empty (`@NotBlank`), trimmed before save. Persisted with max length 255. | None |
 | `isActive` | No | boolean | `true` or `false`. | `true` if omitted |
-| `formula` | Yes | JSON object | Must parse into engine AST and pass validation. | None |
+| `formula` | Conditional | JSON object | Required when `nativeSql` is not provided. Must parse into engine AST and pass validation. | None |
+| `nativeSql` | Conditional | string | Optional native SQL input converted to internal formula JSON. Required when `formula` is not provided. | None |
 
 Notes:
 - Persistence defaults: `version=1`, `createdAt` and `updatedAt` auto-populated.
-- Request contract is DTO-based (`code`, `label`, `formula`, `isActive`). Do not rely on sending DB fields like `id`, `version`, `createdAt`, `updatedAt`.
+- Request contract is DTO-based (`code`, `label`, `formula`, `nativeSql`, `isActive`). Do not rely on sending DB fields like `id`, `version`, `createdAt`, `updatedAt`.
+- If both `formula` and `nativeSql` are sent, `nativeSql` is converted and used as the source formula.
 
-### 2.1 Request Body Parameter Values (Postman Quick Matrix)
+### 2.1 Native SQL Input (Optional)
+
+`nativeSql` supports a restricted analytical SQL subset:
+
+- Single `SELECT` with exactly one aggregation in `SUM`, `AVG`, `COUNT`, `MIN`, `MAX`
+- `FROM fact_balance` (schema prefix accepted)
+- Optional joins on `dim_client`, `dim_contrat`, and `sub_dim_*`
+- Optional `WHERE` with `=`, `!=`, `<`, `>`, `<=`, `>=`, `IN`, `NOT IN`, `BETWEEN`, `LIKE`, `IS NULL`
+- Optional `GROUP BY`, `ORDER BY`, `LIMIT` / `TOP`
+
+Rejected SQL patterns include:
+
+- `INSERT`, `UPDATE`, `DELETE`
+- `UNION` / multi-select set operations
+- Subqueries
+- `HAVING`
+
+On invalid SQL, API returns `400` with:
+
+```json
+{
+  "error": "INVALID_SQL",
+  "message": "Unsupported SQL structure",
+  "details": ["..."]
+}
+```
+
+### 2.2 Request Body Parameter Values (Postman Quick Matrix)
 
 Use this matrix as a checklist when building your JSON body in Postman.
 
@@ -48,7 +96,8 @@ Use this matrix as a checklist when building your JSON body in Postman.
 | `code` | Yes | string | Any non-empty unique code (recommended uppercase letters, numbers, `_`) | `"ENT10"` |
 | `label` | Yes | string | Any non-empty display label | `"Top 10 exposition"` |
 | `isActive` | No | boolean | `true`, `false` | `true` |
-| `formula` | Yes | object | Shape A (wrapper with `expression`) or Shape B (direct expression root) | `{ ... }` |
+| `formula` | Conditional | object | Required when `nativeSql` is not provided. Shape A (wrapper with `expression`) or Shape B (direct expression root) | `{ ... }` |
+| `nativeSql` | Conditional | string | Required when `formula` is not provided. Restricted native SQL subset converted to formula JSON. | `"SELECT SUM(soldeconvertie) FROM fact_balance f"` |
 | `formula.expression` | Yes | object | Any valid expression node | `{ "type": "AGGREGATION", ... }` |
 | `formula.expression.type` | Yes | string | `FIELD`, `VALUE`, `AGGREGATION`, `ADD`, `SUBTRACT`, `MULTIPLY`, `DIVIDE` | `"AGGREGATION"` |
 | `formula.expression.field` | Conditional | string | Any field from `GET /parameters/supported-fields` | `"soldeconvertie"` |
@@ -73,7 +122,7 @@ Use this matrix as a checklist when building your JSON body in Postman.
 | `formula.limit` | No | integer | Positive integer (`> 0`), requires `orderBy`, cannot be combined with `top` | `10` |
 | `formula.top` | No | integer | Positive integer (`> 0`), requires `orderBy`, cannot be combined with `limit` | `10` |
 
-### 2.2 Copy/Paste Request Template
+### 2.3 Copy/Paste Request Template
 
 ```json
 {
@@ -491,7 +540,7 @@ This section is exhaustive against the current `FieldRegistry` and now covers fa
 Notes:
 - Field matching is case-insensitive (internal normalization to lowercase).
 - Joins are auto-inferred from referenced fields in expression, where/filter, aggregation filters, groupBy, and orderBy.
-- Runtime list endpoint: `GET /parameters/supported-fields` returns all currently supported keys from `FieldRegistry`.
+- Runtime list endpoint: `GET /parameters/supported-fields` returns all currently supported keys and grouped keys by table from `FieldRegistry`.
 
 ## 8) SQL Generation Behavior
 

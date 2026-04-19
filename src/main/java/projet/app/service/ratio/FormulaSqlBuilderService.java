@@ -2,11 +2,9 @@ package projet.app.service.ratio;
 
 import org.springframework.stereotype.Service;
 import projet.app.dto.FormulaSqlResponseDTO;
-import projet.app.ratio.formula.AggregateNode;
 import projet.app.ratio.formula.BinaryNode;
 import projet.app.ratio.formula.ConstantNode;
 import projet.app.ratio.formula.ExpressionNode;
-import projet.app.ratio.formula.FilterNode;
 import projet.app.ratio.formula.ParamNode;
 import projet.app.service.mapping.FormulaService;
 
@@ -15,7 +13,6 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 public class FormulaSqlBuilderService {
@@ -47,14 +44,6 @@ public class FormulaSqlBuilderService {
 
         if ("CONSTANT".equals(type)) {
             return buildConstantSql(node);
-        }
-
-        if ("AGGREGATE".equals(type)) {
-            return buildAggregateSql(node, parameterSqlCache, referenceDate);
-        }
-
-        if ("FILTER".equals(type)) {
-            return buildFilterSql(node, parameterSqlCache, referenceDate);
         }
 
         if (!(node instanceof BinaryNode binaryNode)) {
@@ -103,77 +92,5 @@ public class FormulaSqlBuilderService {
         return BigDecimal.valueOf(constantNode.getValue())
                 .stripTrailingZeros()
                 .toPlainString();
-    }
-
-    private String buildAggregateSql(
-            ExpressionNode node,
-            Map<String, String> parameterSqlCache,
-            LocalDate referenceDate
-    ) {
-        if (!(node instanceof AggregateNode aggregateNode)) {
-            throw new IllegalArgumentException("AGGREGATE node has invalid structure");
-        }
-        if (aggregateNode.getFunction() == null || aggregateNode.getFunction().isBlank()) {
-            throw new IllegalArgumentException("AGGREGATE.function is required");
-        }
-        if (aggregateNode.getInput() == null) {
-            throw new IllegalArgumentException("AGGREGATE.input is required");
-        }
-
-        String function = aggregateNode.getFunction().trim().toUpperCase(Locale.ROOT);
-        if (!Set.of("SUM", "AVG", "MAX", "MIN", "COUNT").contains(function)) {
-            throw new IllegalArgumentException("Unsupported AGGREGATE.function: " + aggregateNode.getFunction());
-        }
-
-        String inputSql = build(aggregateNode.getInput(), parameterSqlCache, referenceDate);
-        return function + "(" + inputSql + ")";
-    }
-
-    private String buildFilterSql(
-            ExpressionNode node,
-            Map<String, String> parameterSqlCache,
-            LocalDate referenceDate
-    ) {
-        if (!(node instanceof FilterNode filterNode)) {
-            throw new IllegalArgumentException("FILTER node has invalid structure");
-        }
-        if (filterNode.getInput() == null) {
-            throw new IllegalArgumentException("FILTER.input is required");
-        }
-        if (filterNode.getCondition() == null) {
-            throw new IllegalArgumentException("FILTER.condition is required");
-        }
-        if (filterNode.getCondition().getOperator() == null || filterNode.getCondition().getOperator().isBlank()) {
-            throw new IllegalArgumentException("FILTER.condition.operator is required");
-        }
-        if (filterNode.getCondition().getValue() == null) {
-            throw new IllegalArgumentException("FILTER.condition.value is required");
-        }
-
-        String inputSql = build(filterNode.getInput(), parameterSqlCache, referenceDate);
-        String leftConditionSql = filterNode.getCondition().getExpression() == null
-                ? inputSql
-                : build(filterNode.getCondition().getExpression(), parameterSqlCache, referenceDate);
-        String operator = toSqlOperator(filterNode.getCondition().getOperator());
-        String valueSql = BigDecimal.valueOf(filterNode.getCondition().getValue())
-                .stripTrailingZeros()
-                .toPlainString();
-
-        return "(CASE WHEN (" + leftConditionSql + " " + operator + " " + valueSql + ") THEN "
-                + inputSql
-                + " ELSE 0 END)";
-    }
-
-    private String toSqlOperator(String operator) {
-        String normalized = operator.trim().toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case ">", "GT" -> ">";
-            case ">=", "GTE" -> ">=";
-            case "<", "LT" -> "<";
-            case "<=", "LTE" -> "<=";
-            case "=", "==", "EQ" -> "=";
-            case "!=", "<>", "NE" -> "<>";
-            default -> throw new IllegalArgumentException("Unsupported FILTER.condition.operator: " + operator);
-        };
     }
 }

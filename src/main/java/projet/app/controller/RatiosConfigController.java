@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import projet.app.dto.BulkDeleteResponseDTO;
 import projet.app.dto.RatioExecutionResponseDTO;
 import projet.app.dto.RatioSimulationRequestDTO;
 import projet.app.dto.RatioSimulationResponseDTO;
@@ -67,6 +68,11 @@ public class RatiosConfigController {
     public ResponseEntity<Void> delete(@PathVariable String code) {
         ratiosService.deleteByCode(code);
         return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping
+    public ResponseEntity<BulkDeleteResponseDTO> deleteMany(@RequestBody List<String> codes) {
+        return ResponseEntity.ok(ratiosService.deleteManyByCodes(codes));
     }
 
     @PostMapping("/{code}/execute/{date}")

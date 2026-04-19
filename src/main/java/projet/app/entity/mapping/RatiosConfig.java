@@ -36,11 +36,11 @@ public class RatiosConfig {
     @Column(name = "label", nullable = false, length = 255)
     private String label;
 
-    @Column(name = "famille", nullable = false, length = 255)
-    private String famille;
+    @Column(name = "famille_id", nullable = false)
+    private Long familleId;
 
-    @Column(name = "categorie", nullable = false, length = 255)
-    private String categorie;
+    @Column(name = "categorie_id", nullable = false)
+    private Long categorieId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "formula_json", nullable = false, columnDefinition = "jsonb")

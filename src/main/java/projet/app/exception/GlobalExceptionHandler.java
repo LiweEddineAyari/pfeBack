@@ -30,6 +30,21 @@ public class GlobalExceptionHandler {
                 .build());
     }
 
+    @ExceptionHandler(InvalidSqlException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidSql(
+            InvalidSqlException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("INVALID_SQL")
+                .message(ex.getMessage())
+                .details(ex.getDetails())
+                .path(request.getRequestURI())
+                .build());
+    }
+
     @ExceptionHandler(ParameterConfigNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleConfigNotFound(
             ParameterConfigNotFoundException ex,

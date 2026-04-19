@@ -14,11 +14,11 @@ public class RatiosConfigRequestDTO {
     @NotBlank(message = "label is required")
     private String label;
 
-    @NotBlank(message = "famille is required")
-    private String famille;
+    @NotNull(message = "familleId is required")
+    private Long familleId;
 
-    @NotBlank(message = "categorie is required")
-    private String categorie;
+    @NotNull(message = "categorieId is required")
+    private Long categorieId;
 
     @NotNull(message = "formula is required")
     private JsonNode formula;

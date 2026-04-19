@@ -3,7 +3,7 @@ package projet.app.service.ratio;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import projet.app.dto.RatioDimensionValueDTO;
+import projet.app.dto.BulkDeleteResponseDTO;
 import projet.app.dto.RatioExecutionResponseDTO;
 import projet.app.dto.RatioSimulationRequestDTO;
 import projet.app.dto.RatioSimulationResponseDTO;
@@ -12,14 +12,15 @@ import projet.app.dto.RatiosConfigResponseDTO;
 import projet.app.entity.mapping.RatiosConfig;
 import projet.app.exception.RatiosConfigNotFoundException;
 import projet.app.ratio.formula.ExpressionNode;
+import projet.app.repository.mapping.CategorieRatiosRepository;
+import projet.app.repository.mapping.FamilleRatiosRepository;
 import projet.app.repository.mapping.RatiosConfigRepository;
 
 import java.time.LocalDate;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class RatiosEngineService {
@@ -29,19 +30,25 @@ public class RatiosEngineService {
     private final FormulaValidatorService formulaValidatorService;
     private final FormulaEvaluationService formulaEvaluationService;
     private final FormulaSqlBuilderService formulaSqlBuilderService;
+    private final FamilleRatiosRepository familleRatiosRepository;
+    private final CategorieRatiosRepository categorieRatiosRepository;
 
     public RatiosEngineService(
             RatiosConfigRepository ratiosConfigRepository,
             RatioFormulaMapper ratioFormulaMapper,
             FormulaValidatorService formulaValidatorService,
             FormulaEvaluationService formulaEvaluationService,
-            FormulaSqlBuilderService formulaSqlBuilderService
+            FormulaSqlBuilderService formulaSqlBuilderService,
+            FamilleRatiosRepository familleRatiosRepository,
+            CategorieRatiosRepository categorieRatiosRepository
     ) {
         this.ratiosConfigRepository = ratiosConfigRepository;
         this.ratioFormulaMapper = ratioFormulaMapper;
         this.formulaValidatorService = formulaValidatorService;
         this.formulaEvaluationService = formulaEvaluationService;
         this.formulaSqlBuilderService = formulaSqlBuilderService;
+        this.familleRatiosRepository = familleRatiosRepository;
+        this.categorieRatiosRepository = categorieRatiosRepository;
     }
 
     @Transactional
@@ -51,14 +58,16 @@ public class RatiosEngineService {
             throw new IllegalArgumentException("Ratios config already exists for code: " + ratioCode);
         }
 
+        validateForeignKeys(request.getFamilleId(), request.getCategorieId());
+
         ExpressionNode expressionNode = parseAndValidate(request.getFormula());
         JsonNode normalizedFormula = ratioFormulaMapper.toJsonNode(expressionNode);
 
         RatiosConfig entity = RatiosConfig.builder()
                 .code(ratioCode)
                 .label(request.getLabel().trim())
-                .famille(request.getFamille().trim())
-                .categorie(request.getCategorie().trim())
+            .familleId(request.getFamilleId())
+            .categorieId(request.getCategorieId())
                 .formula(normalizedFormula)
                 .seuilTolerance(request.getSeuilTolerance())
                 .seuilAlerte(request.getSeuilAlerte())
@@ -83,12 +92,14 @@ public class RatiosEngineService {
             throw new IllegalArgumentException("Request code does not match path code");
         }
 
+        validateForeignKeys(request.getFamilleId(), request.getCategorieId());
+
         ExpressionNode expressionNode = parseAndValidate(request.getFormula());
         JsonNode normalizedFormula = ratioFormulaMapper.toJsonNode(expressionNode);
 
         existing.setLabel(request.getLabel().trim());
-        existing.setFamille(request.getFamille().trim());
-        existing.setCategorie(request.getCategorie().trim());
+        existing.setFamilleId(request.getFamilleId());
+        existing.setCategorieId(request.getCategorieId());
         existing.setFormula(normalizedFormula);
         existing.setSeuilTolerance(request.getSeuilTolerance());
         existing.setSeuilAlerte(request.getSeuilAlerte());
@@ -125,17 +136,44 @@ public class RatiosEngineService {
         ratiosConfigRepository.delete(entity);
     }
 
+        @Transactional
+        public BulkDeleteResponseDTO deleteManyByCodes(List<String> codes) {
+        List<String> normalizedCodes = normalizeCodeList(codes);
+        List<RatiosConfig> existingConfigs = ratiosConfigRepository.findAllByCodeIn(normalizedCodes);
+
+        Set<String> existingCodes = existingConfigs.stream()
+            .map(RatiosConfig::getCode)
+            .collect(Collectors.toSet());
+
+        List<String> deletedCodes = normalizedCodes.stream()
+            .filter(existingCodes::contains)
+            .toList();
+
+        List<String> missingCodes = normalizedCodes.stream()
+            .filter(code -> !existingCodes.contains(code))
+            .toList();
+
+        if (!existingConfigs.isEmpty()) {
+            ratiosConfigRepository.deleteAllInBatch(existingConfigs);
+        }
+
+        return BulkDeleteResponseDTO.builder()
+            .requestedCount(normalizedCodes.size())
+            .deletedCount(deletedCodes.size())
+            .deletedCodes(deletedCodes)
+            .missingCodes(missingCodes)
+            .build();
+        }
+
     @Transactional(readOnly = true)
     public RatioSimulationResponseDTO simulate(RatioSimulationRequestDTO request) {
         ExpressionNode expressionNode = parseAndValidate(request.getFormula());
-        ParameterResult result = formulaEvaluationService.evaluate(expressionNode);
+        double value = formulaEvaluationService.evaluate(expressionNode);
         String sqlExpression = formulaSqlBuilderService.build(expressionNode);
         Set<String> referencedParameters = formulaValidatorService.collectReferencedParameterCodes(expressionNode);
 
         return RatioSimulationResponseDTO.builder()
-                .mode(result.mode().name())
-                .value(result.isScalar() ? result.getValue() : null)
-                .rows(result.isMultiRow() ? toDimensionRows(result.getRows()) : null)
+                .value(value)
                 .sqlExpression(sqlExpression)
                 .referencedParameters(referencedParameters)
                 .build();
@@ -154,45 +192,11 @@ public class RatiosEngineService {
         return RatioExecutionResponseDTO.builder()
                 .code(ratio.getCode())
                 .referenceDate(referenceDate)
-                .mode(evaluation.result().mode().name())
-                .value(evaluation.result().isScalar() ? evaluation.result().getValue() : null)
-                .rows(evaluation.result().isMultiRow() ? toDimensionRows(evaluation.result().getRows()) : null)
+                .value(evaluation.value())
                 .sqlExpression(sqlExpression)
                 .referencedParameters(referencedParameters)
-                .resolvedParameters(extractScalarParameters(evaluation.resolvedParameters()))
-                .resolvedParameterRows(extractMultiRowParameters(evaluation.resolvedParameters()))
+                .resolvedParameters(evaluation.resolvedParameters())
                 .build();
-    }
-
-    private List<RatioDimensionValueDTO> toDimensionRows(List<RowValue> rows) {
-        return rows.stream()
-                .map(row -> RatioDimensionValueDTO.builder()
-                        .dimensionKey(row.dimensionKey())
-                        .value(row.value())
-                        .build())
-                .toList();
-    }
-
-    private Map<String, Double> extractScalarParameters(Map<String, ParameterResult> resolvedParameters) {
-        Map<String, Double> scalarParameters = new LinkedHashMap<>();
-        for (Map.Entry<String, ParameterResult> entry : resolvedParameters.entrySet()) {
-            if (entry.getValue() != null && entry.getValue().isScalar()) {
-                scalarParameters.put(entry.getKey(), entry.getValue().getValue());
-            }
-        }
-        return scalarParameters;
-    }
-
-    private Map<String, List<RatioDimensionValueDTO>> extractMultiRowParameters(
-            Map<String, ParameterResult> resolvedParameters
-    ) {
-        Map<String, List<RatioDimensionValueDTO>> rowParameters = new LinkedHashMap<>();
-        for (Map.Entry<String, ParameterResult> entry : resolvedParameters.entrySet()) {
-            if (entry.getValue() != null && entry.getValue().isMultiRow()) {
-                rowParameters.put(entry.getKey(), toDimensionRows(entry.getValue().getRows()));
-            }
-        }
-        return rowParameters;
     }
 
     private ExpressionNode parseAndValidate(JsonNode formulaNode) {
@@ -206,8 +210,8 @@ public class RatiosEngineService {
                 .id(entity.getId())
                 .code(entity.getCode())
                 .label(entity.getLabel())
-                .famille(entity.getFamille())
-                .categorie(entity.getCategorie())
+                .familleId(entity.getFamilleId())
+                .categorieId(entity.getCategorieId())
                 .formula(entity.getFormula())
                 .seuilTolerance(entity.getSeuilTolerance())
                 .seuilAlerte(entity.getSeuilAlerte())
@@ -218,5 +222,33 @@ public class RatiosEngineService {
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    private void validateForeignKeys(Long familleId, Long categorieId) {
+        if (familleId == null || !familleRatiosRepository.existsById(familleId)) {
+            throw new IllegalArgumentException("familleId does not exist: " + familleId);
+        }
+
+        if (categorieId == null || !categorieRatiosRepository.existsById(categorieId)) {
+            throw new IllegalArgumentException("categorieId does not exist: " + categorieId);
+        }
+    }
+
+    private List<String> normalizeCodeList(List<String> codes) {
+        if (codes == null || codes.isEmpty()) {
+            throw new IllegalArgumentException("codes list must not be empty");
+        }
+
+        List<String> normalizedCodes = codes.stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+
+        if (normalizedCodes.isEmpty()) {
+            throw new IllegalArgumentException("codes list must contain at least one non-empty code");
+        }
+
+        return normalizedCodes;
     }
 }

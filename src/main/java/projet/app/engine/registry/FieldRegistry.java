@@ -4,14 +4,40 @@ import org.springframework.stereotype.Component;
 import projet.app.engine.enums.FormulaValueType;
 import projet.app.exception.FormulaValidationException;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 @Component
 public class FieldRegistry {
+
+    private static final Map<String, String> TABLE_BY_ALIAS = Map.ofEntries(
+            Map.entry("f", "datamart.fact_balance"),
+            Map.entry("cl", "datamart.dim_client"),
+            Map.entry("dc", "datamart.dim_contrat"),
+            Map.entry("agf", "datamart.sub_dim_agence"),
+            Map.entry("agc", "datamart.sub_dim_agence"),
+            Map.entry("aec", "datamart.sub_dim_agenteco"),
+            Map.entry("ch", "datamart.sub_dim_chapitre"),
+            Map.entry("c", "datamart.sub_dim_compte"),
+            Map.entry("dtf", "datamart.sub_dim_date"),
+            Map.entry("dto", "datamart.sub_dim_date"),
+            Map.entry("dte", "datamart.sub_dim_date"),
+            Map.entry("dvf", "datamart.sub_dim_devise"),
+            Map.entry("dvb", "datamart.sub_dim_devise"),
+            Map.entry("dvc", "datamart.sub_dim_devise"),
+            Map.entry("dout", "datamart.sub_dim_douteux"),
+            Map.entry("gaf", "datamart.sub_dim_grpaffaire"),
+            Map.entry("ofc", "datamart.sub_dim_objetfinance"),
+            Map.entry("res", "datamart.sub_dim_residence"),
+            Map.entry("sac", "datamart.sub_dim_sectionactivite"),
+            Map.entry("tyc", "datamart.sub_dim_typcontrat")
+    );
 
     private final Map<String, FieldDefinition> fields;
 
@@ -275,6 +301,22 @@ public class FieldRegistry {
         return fields.keySet();
     }
 
+    public Map<String, List<String>> supportedFieldsGroupedByTable() {
+        Map<String, List<String>> grouped = new TreeMap<>();
+
+        fields.keySet().stream()
+                .sorted()
+                .forEach(field -> {
+                    FieldDefinition definition = fields.get(field);
+                    String tableName = tableNameForAlias(definition.tableAlias());
+                    grouped.computeIfAbsent(tableName, k -> new ArrayList<>()).add(field);
+                });
+
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        grouped.forEach((table, groupedFields) -> result.put(table, List.copyOf(groupedFields)));
+        return Collections.unmodifiableMap(result);
+    }
+
     private FormulaValueType toFormulaValueType(FieldDataType dataType) {
         return switch (dataType) {
             case NUMBER -> FormulaValueType.NUMERIC;
@@ -301,6 +343,13 @@ public class FieldRegistry {
             throw new IllegalStateException("Cannot alias unknown field " + canonicalFieldName);
         }
         catalog.put(normalize(aliasName), canonical);
+    }
+
+    private String tableNameForAlias(String tableAlias) {
+        if (tableAlias == null || tableAlias.isBlank()) {
+            return "datamart.fact_balance";
+        }
+        return TABLE_BY_ALIAS.getOrDefault(tableAlias.toLowerCase(Locale.ROOT), "unknown");
     }
 
     private String normalize(String fieldName) {

@@ -2,6 +2,7 @@ package projet.app.service.ratio;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import projet.app.dto.BulkDeleteResponseDTO;
 import projet.app.dto.RatioExecutionResponseDTO;
 import projet.app.dto.RatioSimulationRequestDTO;
 import projet.app.dto.RatioSimulationResponseDTO;
@@ -43,6 +44,11 @@ public class RatiosService {
     @Transactional
     public void deleteByCode(String code) {
         ratiosEngineService.deleteByCode(code);
+    }
+
+    @Transactional
+    public BulkDeleteResponseDTO deleteManyByCodes(List<String> codes) {
+        return ratiosEngineService.deleteManyByCodes(codes);
     }
 
     @Transactional(readOnly = true)

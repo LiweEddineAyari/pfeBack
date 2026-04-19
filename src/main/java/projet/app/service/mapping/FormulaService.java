@@ -2,6 +2,7 @@ package projet.app.service.mapping;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import projet.app.dto.BulkDeleteResponseDTO;
 import projet.app.dto.FormulaExecutionResponseDTO;
 import projet.app.dto.FormulaRequestDTO;
 import projet.app.dto.FormulaSqlResponseDTO;
@@ -9,6 +10,7 @@ import projet.app.dto.ParameterConfigResponseDTO;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class FormulaService {
@@ -35,6 +37,16 @@ public class FormulaService {
     }
 
     @Transactional(readOnly = true)
+    public ParameterConfigResponseDTO getById(Long id) {
+        return formulaEngineService.getById(id);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParameterConfigResponseDTO> list() {
+        return formulaEngineService.list();
+    }
+
+    @Transactional(readOnly = true)
     public FormulaSqlResponseDTO compileByCode(String code) {
         return formulaEngineService.compileByCode(code);
     }
@@ -57,5 +69,20 @@ public class FormulaService {
     @Transactional(readOnly = true)
     public List<String> getSupportedFields() {
         return formulaEngineService.getSupportedFields();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, List<String>> getSupportedFieldsGroupedByTable() {
+        return formulaEngineService.getSupportedFieldsGroupedByTable();
+    }
+
+    @Transactional
+    public void deleteByCode(String code) {
+        formulaEngineService.deleteByCode(code);
+    }
+
+    @Transactional
+    public BulkDeleteResponseDTO deleteManyByCodes(List<String> codes) {
+        return formulaEngineService.deleteManyByCodes(codes);
     }
 }

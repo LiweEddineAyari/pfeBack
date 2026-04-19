@@ -2,8 +2,10 @@ package projet.app.service.mapping;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import projet.app.dto.BulkDeleteResponseDTO;
 import projet.app.dto.FormulaExecutionResponseDTO;
 import projet.app.dto.FormulaRequestDTO;
 import projet.app.dto.FormulaSqlResponseDTO;
@@ -17,6 +19,9 @@ import projet.app.repository.mapping.ParameterConfigRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class FormulaEngineService {
@@ -24,6 +29,7 @@ public class FormulaEngineService {
     private final ParameterConfigRepository parameterConfigRepository;
     private final ValidationService validationService;
     private final SqlCompilerService sqlCompilerService;
+    private final SqlToParameterConverterService sqlToParameterConverterService;
     private final FieldRegistry fieldRegistry;
     private final JdbcTemplate jdbcTemplate;
 
@@ -31,12 +37,14 @@ public class FormulaEngineService {
             ParameterConfigRepository parameterConfigRepository,
             ValidationService validationService,
             SqlCompilerService sqlCompilerService,
+            SqlToParameterConverterService sqlToParameterConverterService,
             FieldRegistry fieldRegistry,
             JdbcTemplate jdbcTemplate
     ) {
         this.parameterConfigRepository = parameterConfigRepository;
         this.validationService = validationService;
         this.sqlCompilerService = sqlCompilerService;
+        this.sqlToParameterConverterService = sqlToParameterConverterService;
         this.fieldRegistry = fieldRegistry;
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -47,7 +55,7 @@ public class FormulaEngineService {
             throw new IllegalArgumentException("Parameter config already exists for code: " + request.getCode());
         }
 
-        JsonNode normalizedFormula = normalizeAndValidate(request.getFormula());
+        JsonNode normalizedFormula = normalizeAndValidate(resolveFormulaRequest(request));
 
         ParameterConfig entity = ParameterConfig.builder()
                 .code(request.getCode().trim())
@@ -70,7 +78,7 @@ public class FormulaEngineService {
             throw new IllegalArgumentException("Request code does not match path code");
         }
 
-        JsonNode normalizedFormula = normalizeAndValidate(request.getFormula());
+        JsonNode normalizedFormula = normalizeAndValidate(resolveFormulaRequest(request));
 
         existing.setLabel(request.getLabel().trim());
         existing.setFormulaJson(normalizedFormula);
@@ -88,6 +96,21 @@ public class FormulaEngineService {
         ParameterConfig config = parameterConfigRepository.findByCode(code)
                 .orElseThrow(() -> new ParameterConfigNotFoundException(code));
         return toResponse(config);
+    }
+
+    @Transactional(readOnly = true)
+    public ParameterConfigResponseDTO getById(Long id) {
+        ParameterConfig config = parameterConfigRepository.findById(id)
+                .orElseThrow(() -> new ParameterConfigNotFoundException(id));
+        return toResponse(config);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParameterConfigResponseDTO> list() {
+        return parameterConfigRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt"))
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -153,9 +176,75 @@ public class FormulaEngineService {
                 .toList();
     }
 
+        @Transactional(readOnly = true)
+        public Map<String, List<String>> getSupportedFieldsGroupedByTable() {
+        return fieldRegistry.supportedFieldsGroupedByTable();
+        }
+
+        @Transactional
+        public void deleteByCode(String code) {
+        ParameterConfig existing = parameterConfigRepository.findByCode(code)
+            .orElseThrow(() -> new ParameterConfigNotFoundException(code));
+        parameterConfigRepository.delete(existing);
+        }
+
+        @Transactional
+        public BulkDeleteResponseDTO deleteManyByCodes(List<String> codes) {
+        List<String> normalizedCodes = normalizeCodeList(codes);
+        List<ParameterConfig> existingConfigs = parameterConfigRepository.findAllByCodeIn(normalizedCodes);
+
+        Set<String> existingCodes = existingConfigs.stream()
+            .map(ParameterConfig::getCode)
+            .collect(Collectors.toSet());
+
+        List<String> deletedCodes = normalizedCodes.stream()
+            .filter(existingCodes::contains)
+            .toList();
+
+        List<String> missingCodes = normalizedCodes.stream()
+            .filter(code -> !existingCodes.contains(code))
+            .toList();
+
+        if (!existingConfigs.isEmpty()) {
+            parameterConfigRepository.deleteAllInBatch(existingConfigs);
+        }
+
+        return BulkDeleteResponseDTO.builder()
+            .requestedCount(normalizedCodes.size())
+            .deletedCount(deletedCodes.size())
+            .deletedCodes(deletedCodes)
+            .missingCodes(missingCodes)
+            .build();
+        }
+
     private JsonNode normalizeAndValidate(JsonNode formulaNode) {
         validationService.validateAndParse(formulaNode);
         return formulaNode;
+    }
+
+    private JsonNode resolveFormulaRequest(FormulaRequestDTO request) {
+        if (request.getNativeSql() != null && !request.getNativeSql().isBlank()) {
+            return sqlToParameterConverterService.convertToFormula(request.getNativeSql());
+        }
+        return request.getFormula();
+    }
+
+    private List<String> normalizeCodeList(List<String> codes) {
+        if (codes == null || codes.isEmpty()) {
+            throw new IllegalArgumentException("codes list must not be empty");
+        }
+
+        List<String> normalizedCodes = codes.stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+
+        if (normalizedCodes.isEmpty()) {
+            throw new IllegalArgumentException("codes list must contain at least one non-empty code");
+        }
+
+        return normalizedCodes;
     }
 
     private CompiledSql compileDefinition(FormulaDefinition definition, LocalDate referenceDate) {
