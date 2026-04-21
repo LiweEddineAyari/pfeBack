@@ -6,4 +6,8 @@ import projet.app.entity.mapping.FamilleRatios;
 
 @Repository
 public interface FamilleRatiosRepository extends JpaRepository<FamilleRatios, Long> {
+
+	boolean existsByNameIgnoreCase(String name);
+
+	boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 }

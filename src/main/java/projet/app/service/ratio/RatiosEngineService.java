@@ -15,6 +15,7 @@ import projet.app.ratio.formula.ExpressionNode;
 import projet.app.repository.mapping.CategorieRatiosRepository;
 import projet.app.repository.mapping.FamilleRatiosRepository;
 import projet.app.repository.mapping.RatiosConfigRepository;
+import projet.app.service.dashboard.DashboardService;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -32,6 +33,7 @@ public class RatiosEngineService {
     private final FormulaSqlBuilderService formulaSqlBuilderService;
     private final FamilleRatiosRepository familleRatiosRepository;
     private final CategorieRatiosRepository categorieRatiosRepository;
+    private final DashboardService dashboardService;
 
     public RatiosEngineService(
             RatiosConfigRepository ratiosConfigRepository,
@@ -40,7 +42,8 @@ public class RatiosEngineService {
             FormulaEvaluationService formulaEvaluationService,
             FormulaSqlBuilderService formulaSqlBuilderService,
             FamilleRatiosRepository familleRatiosRepository,
-            CategorieRatiosRepository categorieRatiosRepository
+            CategorieRatiosRepository categorieRatiosRepository,
+            DashboardService dashboardService
     ) {
         this.ratiosConfigRepository = ratiosConfigRepository;
         this.ratioFormulaMapper = ratioFormulaMapper;
@@ -49,6 +52,7 @@ public class RatiosEngineService {
         this.formulaSqlBuilderService = formulaSqlBuilderService;
         this.familleRatiosRepository = familleRatiosRepository;
         this.categorieRatiosRepository = categorieRatiosRepository;
+        this.dashboardService = dashboardService;
     }
 
     @Transactional
@@ -78,6 +82,7 @@ public class RatiosEngineService {
                 .build();
 
         RatiosConfig saved = ratiosConfigRepository.save(entity);
+        dashboardService.initializeForNewRatio(saved, expressionNode);
         return toResponse(saved);
     }
 

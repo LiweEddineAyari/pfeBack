@@ -22,8 +22,29 @@ Base path: `/ratios`
 - `GET /ratios/{code}` get one ratio by code
 - `PUT /ratios/{code}` update one ratio by code
 - `DELETE /ratios/{code}` delete one ratio by code
+- `DELETE /ratios` delete many ratios by code list (request body: array of strings)
 - `POST /ratios/simulate` evaluate formula without persisting
 - `POST /ratios/{code}/execute/{date}` evaluate one stored ratio at reference balance date (`YYYY-MM-DD`)
+
+Family lookup endpoints:
+- `POST /ratios/families` create one family (`name`)
+- `GET /ratios/families` list families
+- `GET /ratios/families/{id}` get one family by id
+- `PUT /ratios/families/{id}` update one family by id
+- `DELETE /ratios/families/{id}` delete one family by id
+
+Category lookup endpoints:
+- `POST /ratios/categories` create one category (`name`)
+- `GET /ratios/categories` list categories
+- `GET /ratios/categories/{id}` get one category by id
+- `PUT /ratios/categories/{id}` update one category by id
+- `DELETE /ratios/categories/{id}` delete one category by id
+
+Dashboard endpoints:
+- `POST /dashboard` create one dashboard row
+- `GET /dashboard` list dashboard rows (all dates)
+- `GET /dashboard?date=YYYY-MM-DD` list dashboard rows for one date
+- `GET /dashboard/date/{date}` list dashboard rows for one date
 
 ## 2) Request Body Contract (POST /ratios and PUT /ratios/{code})
 
@@ -33,8 +54,8 @@ Base path: `/ratios`
 |---|---|---|---|
 | `code` | Yes | string | Non-empty, unique, recommended short business code (`RS`, `RL`, `ROE`) |
 | `label` | Yes | string | Non-empty human-readable label |
-| `famille` | Yes | string | Non-empty family name (text, not numeric id) |
-| `categorie` | Yes | string | Non-empty category name |
+| `familleId` | Yes | integer (`Long`) | Foreign key to `mapping.famille_ratios.id` (must exist) |
+| `categorieId` | Yes | integer (`Long`) | Foreign key to `mapping.categorie_ratios.id` (must exist) |
 | `formula` | Yes | object | Must be a valid expression tree |
 | `seuilTolerance` | No | number | Optional threshold |
 | `seuilAlerte` | No | number | Optional threshold |
@@ -42,9 +63,30 @@ Base path: `/ratios`
 | `description` | No | string | Optional descriptive text |
 | `isActive` | No | boolean | Defaults to `true` when omitted |
 
+### Family and Category are Foreign Keys (Important)
+
+`familleId` and `categorieId` are mandatory FK ids, not free-text labels.
+
+Back-end checks before save/update:
+- `familleId` exists in `mapping.famille_ratios`
+- `categorieId` exists in `mapping.categorie_ratios`
+
+Quick SQL to fetch valid ids:
+
+```sql
+SELECT id, name FROM mapping.famille_ratios ORDER BY id;
+SELECT id, name FROM mapping.categorie_ratios ORDER BY id;
+```
+
+Reference tables are seeded in `schema.sql` and linked by DB constraints:
+- `fk_ratios_config_famille` on `ratios_config.famille_id`
+- `fk_ratios_config_categorie` on `ratios_config.categorie_id`
+
 ## 3) Formula JSON Structure (Important)
 
 Formulas are always structured JSON (expression tree), never plain text.
+
+The root of `formula` must be an expression node object (with `type` at root). Do not wrap it under `formula.expression` for ratio APIs.
 
 Supported node types:
 - `PARAM` references `ParameterConfig.code`
@@ -53,6 +95,8 @@ Supported node types:
 - `SUBTRACT`
 - `MULTIPLY`
 - `DIVIDE`
+
+`type` must use these exact tokens (uppercase) so JSON polymorphic deserialization can map to the right node class.
 
 ### 3.1 PARAM node
 
@@ -81,6 +125,17 @@ Supported binary `type` values:
 - `SUBTRACT`
 - `MULTIPLY`
 - `DIVIDE`
+
+### 3.4 Formula Contract Details Often Missed
+
+- Every binary node requires both `left` and `right`.
+- `PARAM.code` must already exist in `/parameters` (`mapping.parameters_config.code`).
+- `CONSTANT.value` must be finite (no `NaN`, no `Infinity`).
+- Constant zero on divider side is rejected at validation time (including resolvable constant expressions).
+- Runtime division by zero is still blocked if the divider becomes zero from parameter values.
+- Parameter values are evaluated once per parameter code and cached during a single ratio evaluation.
+- If a parameter execution returns `null` or blank string, it is treated as `0` during ratio evaluation.
+- If a parameter execution returns a non-numeric string/object, ratio evaluation fails.
 
 ## 4) Full Formula Example
 
@@ -122,6 +177,7 @@ Server-side validator ensures:
 - Binary nodes always include `left` and `right`
 - `CONSTANT.value` is present and finite
 - Division-by-zero risk is rejected when right side is a constant-zero expression
+- Formula JSON must deserialize to ratio node model (invalid `type` payload is rejected)
 
 ## 6) Evaluation Rules
 
@@ -162,8 +218,8 @@ Header: `Content-Type: application/json`
 {
   "code": "RS",
   "label": "Ratio de Solvabilite",
-  "famille": "Prudentiel",
-  "categorie": "Capital",
+  "familleId": 5,
+  "categorieId": 1,
   "formula": {
     "type": "DIVIDE",
     "left": { "type": "PARAM", "code": "FONDS_PROPRES" },
@@ -185,8 +241,8 @@ Header: `Content-Type: application/json`
 {
   "code": "RS",
   "label": "Ratio de Solvabilite (maj)",
-  "famille": "Prudentiel",
-  "categorie": "Capital",
+  "familleId": 5,
+  "categorieId": 1,
   "formula": {
     "type": "DIVIDE",
     "left": {
@@ -294,6 +350,15 @@ Expected response shape:
   - Unsupported node type
   - Division by zero risk
 
+- `400 familleId does not exist: ...`
+  - FK id not found in `mapping.famille_ratios`
+
+- `400 categorieId does not exist: ...`
+  - FK id not found in `mapping.categorie_ratios`
+
+- `400 Invalid ratio formula JSON: ...`
+  - Invalid polymorphic node payload (`type` token/structure mismatch)
+
 - `404 Ratios config not found for code`
   - Code does not exist for get/update/delete
 
@@ -301,14 +366,110 @@ Expected response shape:
   - Invalid date path value for `/ratios/{code}/execute/{date}` (must be `YYYY-MM-DD`)
 
 - `400 Request validation failed`
-  - Missing `code`, `label`, `famille`, `categorie`, or `formula`
+  - Missing `code`, `label`, `familleId`, `categorieId`, or `formula`
+
+- `400 Request code does not match path code`
+  - On `PUT /ratios/{code}`, request body `code` (if provided) differs from path
+
+- `404 Famille ratios not found for id: ...`
+  - Family id does not exist
+
+- `404 Categorie ratios not found for id: ...`
+  - Category id does not exist
+
+- `400 Cannot delete famille ratios id ... because it is referenced by ratios config`
+  - Family is still used by one or more ratios
+
+- `400 Cannot delete categorie ratios id ... because it is referenced by ratios config`
+  - Category is still used by one or more ratios
 
 ## 10) Practical Testing Sequence
 
 1. Ensure referenced parameter codes already exist in `/parameters`
-2. Create ratio with `POST /ratios`
-3. Check persisted object with `GET /ratios/{code}`
-4. Execute stored ratio at date with `POST /ratios/{code}/execute/{date}`
-5. Simulate ad-hoc formula with `POST /ratios/simulate`
-6. Update thresholds/formula with `PUT /ratios/{code}`
-7. Remove obsolete ratio with `DELETE /ratios/{code}`
+2. Resolve valid `familleId` and `categorieId` from lookup tables
+3. Create ratio with `POST /ratios`
+4. Check persisted object with `GET /ratios/{code}`
+5. Execute stored ratio at date with `POST /ratios/{code}/execute/{date}`
+6. Simulate ad-hoc formula with `POST /ratios/simulate`
+7. Update thresholds/formula with `PUT /ratios/{code}`
+8. Remove obsolete ratio with `DELETE /ratios/{code}` or bulk `DELETE /ratios`
+
+## 11) Family and Category CRUD Examples
+
+Base URL: `http://localhost:8081`
+Header: `Content-Type: application/json`
+
+Request body for create/update (families and categories):
+
+```json
+{
+  "name": "Ratios Prudentiels"
+}
+```
+
+Response shape (families and categories):
+
+```json
+{
+  "id": 1,
+  "name": "Ratios Prudentiels"
+}
+```
+
+Families examples:
+- `POST /ratios/families`
+- `GET /ratios/families`
+- `GET /ratios/families/1`
+- `PUT /ratios/families/1`
+- `DELETE /ratios/families/1`
+
+Categories examples:
+- `POST /ratios/categories`
+- `GET /ratios/categories`
+- `GET /ratios/categories/1`
+- `PUT /ratios/categories/1`
+- `DELETE /ratios/categories/1`
+
+## 12) Dashboard Table and API
+
+When a new ratio is created (`POST /ratios`), the backend now automatically inserts dashboard rows for each distinct date present in `datamart.fact_balance` (joined to `datamart.sub_dim_date`).
+
+DB table:
+- Schema: `dashboard`
+- Table: `dashboard`
+- Columns: `id`, `id_ratios`, `ratios_value`, `reference_date`, `created_at`
+
+Example behavior:
+- If `fact_balance` contains 3 distinct dates, creating one new ratio inserts 3 rows in `dashboard.dashboard` for that ratio id.
+
+Dashboard API response shape:
+
+```json
+{
+  "id": 10,
+  "idRatios": 3,
+  "code": "RS",
+  "label": "Ratio de Solvabilite",
+  "description": "Fonds propres / actifs ponderes",
+  "familleId": 5,
+  "categorieId": 1,
+  "familleCode": "Indicateurs de solidite financiere: Normes de solvabilite",
+  "categorieCode": "Ratios Prudentiels",
+  "value": 15.37,
+  "date": "2026-04-13"
+}
+```
+
+Create dashboard row request body:
+
+```json
+{
+  "idRatios": 3,
+  "value": 15.37,
+  "date": "2026-04-13"
+}
+```
+
+Common create errors:
+- `400 Ratios config does not exist for id: ...`
+- `400 Dashboard row already exists for ratio id ... and date ...`

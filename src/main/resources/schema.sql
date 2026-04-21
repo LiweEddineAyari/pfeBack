@@ -7,6 +7,9 @@ CREATE SCHEMA IF NOT EXISTS datamart;
 -- Create mapping schema if it doesn't exist
 CREATE SCHEMA IF NOT EXISTS mapping;
 
+-- Create dashboard schema if it doesn't exist
+CREATE SCHEMA IF NOT EXISTS dashboard;
+
 -- Mapping configuration table for source/target column mapping rules
 CREATE TABLE IF NOT EXISTS mapping.mapping_config (
 	id BIGSERIAL PRIMARY KEY,
@@ -83,6 +86,24 @@ CREATE TABLE IF NOT EXISTS mapping.ratios_config (
 	created_at TIMESTAMP DEFAULT NOW(),
 	updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Ratios values persisted by reference date for dashboarding
+CREATE TABLE IF NOT EXISTS dashboard.dashboard (
+	id BIGSERIAL PRIMARY KEY,
+	id_ratios BIGINT NOT NULL,
+	ratios_value DOUBLE PRECISION NOT NULL,
+	reference_date DATE NOT NULL,
+	created_at TIMESTAMP DEFAULT NOW(),
+	CONSTRAINT fk_dashboard_id_ratios
+		FOREIGN KEY (id_ratios) REFERENCES mapping.ratios_config(id) ON DELETE CASCADE,
+	CONSTRAINT uq_dashboard_ratio_date UNIQUE (id_ratios, reference_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_reference_date
+	ON dashboard.dashboard(reference_date);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_id_ratios
+	ON dashboard.dashboard(id_ratios);
 
 -- Backward-compatible migration from legacy text columns to foreign-key ids
 ALTER TABLE mapping.ratios_config

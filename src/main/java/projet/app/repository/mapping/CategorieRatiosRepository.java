@@ -6,4 +6,8 @@ import projet.app.entity.mapping.CategorieRatios;
 
 @Repository
 public interface CategorieRatiosRepository extends JpaRepository<CategorieRatios, Long> {
+
+	boolean existsByNameIgnoreCase(String name);
+
+	boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 }

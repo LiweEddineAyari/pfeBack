@@ -17,4 +17,8 @@ public interface RatiosConfigRepository extends JpaRepository<RatiosConfig, Long
     List<RatiosConfig> findAllByCodeIn(List<String> codes);
 
     Optional<RatiosConfig> findByCodeAndIsActiveTrue(String code);
+
+    boolean existsByFamilleId(Long familleId);
+
+    boolean existsByCategorieId(Long categorieId);
 }
