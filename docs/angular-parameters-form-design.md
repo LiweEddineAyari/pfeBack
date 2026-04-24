@@ -150,9 +150,9 @@ export type FilterLogic = 'AND' | 'OR';
 
 export type FilterOperator =
   | '=' | '!=' | '<>' | '>' | '>=' | '<' | '<='
-  | 'LIKE' | 'IN' | 'NOT IN' | 'BETWEEN'
+  | 'LIKE' | 'STARTS_WITH' | 'ENDS_WITH' | 'CONTAINS' | 'IN' | 'NOT IN' | 'BETWEEN'
   | 'IS NULL' | 'IS NOT NULL'
-  | 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'NOT_IN' | 'IS_NULL' | 'IS_NOT_NULL';
+  | 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'NOT_IN' | 'IS_NULL' | 'IS_NOT_NULL' | 'STARTSWITH' | 'ENDSWITH';
 
 export interface FormulaNode {
   type: FormulaNodeType;

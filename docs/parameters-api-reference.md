@@ -113,7 +113,7 @@ Use this matrix as a checklist when building your JSON body in Postman.
 | `formula.filters` | No | object/array | Alias of `where` | `[ { "field": "dc.actif", ... } ]` |
 | `formula.where.logic` | No | string | `AND`, `OR` | `"AND"` |
 | `formula.where.conditions[].field` | Conditional | string | Any supported field | `"dc.actif"` |
-| `formula.where.conditions[].operator` | Conditional | string | `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`, `LIKE`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, and enum aliases (`EQ`, `NE`, `GT`, `GTE`, `LT`, `LTE`, `NOT_IN`, `IS_NULL`, `IS_NOT_NULL`) | `"IN"` |
+| `formula.where.conditions[].operator` | Conditional | string | `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`, `LIKE`, `STARTS_WITH`, `ENDS_WITH`, `CONTAINS`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, and enum aliases (`EQ`, `NE`, `GT`, `GTE`, `LT`, `LTE`, `NOT_IN`, `IS_NULL`, `IS_NOT_NULL`, `STARTSWITH`, `ENDSWITH`) | `"IN"` |
 | `formula.where.conditions[].value` | Conditional | scalar/array | Depends on operator (`IN`/`NOT IN`: non-empty array, `BETWEEN`: 2-value array, others: scalar) | `[1,2]`, `["2026-01-01","2026-12-31"]`, `1` |
 | `formula.groupBy` | No | array of string | Any supported fields | `["idClient"]` |
 | `formula.orderBy` | No | array | Array of strings or objects | `[ { "field": "value", "direction": "DESC" } ]` |
@@ -297,6 +297,9 @@ Parser accepts SQL-style tokens:
 - `<`
 - `<=`
 - `LIKE`
+- `STARTS_WITH`
+- `ENDS_WITH`
+- `CONTAINS`
 - `IN`
 - `NOT IN`
 - `BETWEEN`
@@ -306,6 +309,7 @@ Parser accepts SQL-style tokens:
 Parser also accepts enum-style tokens for compatibility:
 - `EQ`, `NE`, `GT`, `GTE`, `LT`, `LTE`
 - `NOT_IN`, `IS_NULL`, `IS_NOT_NULL`
+- `STARTSWITH`, `ENDSWITH`, `BEGINS_WITH`
 
 ### Operator-specific value shape
 
@@ -822,6 +826,9 @@ Expected SQL tail:
 Other operator value examples:
 - `"operator": "BETWEEN", "value": ["2026-01-01", "2026-12-31"]`
 - `"operator": "LIKE", "value": "13%"`
+- `"operator": "STARTS_WITH", "value": "ACME"`
+- `"operator": "ENDS_WITH", "value": "SA"`
+- `"operator": "CONTAINS", "value": "GROUP"`
 - `"operator": "IS NULL"`
 - `"operator": "GT", "value": 100`
 
@@ -850,7 +857,70 @@ Other operator value examples:
 }
 ```
 
-### 12.8 Validation fail examples (expected HTTP 400)
+### 12.8 Aggregation arithmetic and filtered aggregations
+
+Multiply an aggregation by a constant (`SUM(f.soldeconvertie) * cte`):
+
+```json
+{
+  "code": "MULT_SUM_CTE",
+  "label": "Sum times constant",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "MULTIPLY",
+      "left": {
+        "type": "AGGREGATION",
+        "function": "SUM",
+        "field": "soldeconvertie"
+      },
+      "right": {
+        "type": "VALUE",
+        "value": 0.15
+      }
+    }
+  }
+}
+```
+
+Subtract two filtered aggregations (`SUM(...) where ... - SUM(...) where ...`):
+
+```json
+{
+  "code": "DIFF_SEGMENTS",
+  "label": "Personnel minus Corporate",
+  "isActive": true,
+  "formula": {
+    "expression": {
+      "type": "SUBTRACT",
+      "left": {
+        "type": "AGGREGATION",
+        "function": "SUM",
+        "field": "soldeconvertie",
+        "filters": {
+          "logic": "AND",
+          "conditions": [
+            { "field": "grpaffaire", "operator": "=", "value": "PERSONNEL" }
+          ]
+        }
+      },
+      "right": {
+        "type": "AGGREGATION",
+        "function": "SUM",
+        "field": "soldeconvertie",
+        "filters": {
+          "logic": "AND",
+          "conditions": [
+            { "field": "grpaffaire", "operator": "=", "value": "CORPORATE" }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+### 12.9 Validation fail examples (expected HTTP 400)
 
 `limit` and `top` together:
 

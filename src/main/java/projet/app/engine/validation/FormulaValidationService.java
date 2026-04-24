@@ -233,8 +233,12 @@ public class FormulaValidationService {
             List<String> errors,
             String path
     ) {
-        if (operator == FilterOperator.LIKE && fieldType != FormulaValueType.STRING) {
-            errors.add(path + ": LIKE operator is only allowed on string fields");
+        if ((operator == FilterOperator.LIKE
+                || operator == FilterOperator.STARTS_WITH
+                || operator == FilterOperator.ENDS_WITH
+                || operator == FilterOperator.CONTAINS)
+                && fieldType != FormulaValueType.STRING) {
+            errors.add(path + ": operator " + operator + " is only allowed on string fields");
             return;
         }
 

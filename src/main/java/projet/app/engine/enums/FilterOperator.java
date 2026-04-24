@@ -13,6 +13,9 @@ public enum FilterOperator {
     LT("<", true, false, false),
     LTE("<=", true, false, false),
     LIKE("LIKE", true, false, false),
+    STARTS_WITH("LIKE", true, false, false),
+    ENDS_WITH("LIKE", true, false, false),
+    CONTAINS("LIKE", true, false, false),
     IN("IN", true, true, false),
     NOT_IN("NOT IN", true, true, false),
     BETWEEN("BETWEEN", true, false, true),
@@ -47,6 +50,10 @@ public enum FilterOperator {
         return rangeValue;
     }
 
+    public boolean isPatternOperator() {
+        return this == LIKE || this == STARTS_WITH || this == ENDS_WITH || this == CONTAINS;
+    }
+
     public static FilterOperator from(String rawOperator) {
         if (rawOperator == null || rawOperator.isBlank()) {
             throw new FormulaValidationException(List.of("Filter operator is required"));
@@ -67,6 +74,9 @@ public enum FilterOperator {
             case "<=" -> LTE;
             case "LTE" -> LTE;
             case "LIKE" -> LIKE;
+            case "STARTS WITH", "STARTS_WITH", "STARTSWITH", "BEGINS WITH", "BEGINS_WITH", "BEGINSWITH" -> STARTS_WITH;
+            case "ENDS WITH", "ENDS_WITH", "ENDSWITH" -> ENDS_WITH;
+            case "CONTAINS" -> CONTAINS;
             case "IN" -> IN;
             case "NOT IN" -> NOT_IN;
             case "NOT_IN" -> NOT_IN;

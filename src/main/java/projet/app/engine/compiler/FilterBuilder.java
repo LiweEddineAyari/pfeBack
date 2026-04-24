@@ -93,6 +93,25 @@ public class FilterBuilder {
             return column + " BETWEEN ? AND ?";
         }
 
+        if (operator.isPatternOperator()) {
+            if (!(value instanceof String patternValue)) {
+                throw new FormulaValidationException(List.of(
+                        "Operator " + operator + " requires a string value for field " + condition.field()
+                ));
+            }
+
+            String normalizedPattern = switch (operator) {
+                case STARTS_WITH -> patternValue + "%";
+                case ENDS_WITH -> "%" + patternValue;
+                case CONTAINS -> "%" + patternValue + "%";
+                default -> patternValue;
+            };
+
+            context.addParameter(normalizedPattern);
+            localParameters.add(normalizedPattern);
+            return column + " LIKE ?";
+        }
+
         context.addParameter(value);
         localParameters.add(value);
         return column + " " + operator.getSqlToken() + " ?";

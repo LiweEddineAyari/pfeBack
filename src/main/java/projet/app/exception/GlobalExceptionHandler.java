@@ -105,6 +105,21 @@ public class GlobalExceptionHandler {
                 .build());
     }
 
+    @ExceptionHandler(StressTestException.class)
+    public ResponseEntity<ApiErrorResponse> handleStressTest(
+            StressTestException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(ex.getErrorCode())
+                .message(ex.getMessage())
+                .details(ex.getDetails())
+                .path(request.getRequestURI())
+                .build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleBeanValidation(
             MethodArgumentNotValidException ex,
