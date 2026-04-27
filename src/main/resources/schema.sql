@@ -38,12 +38,7 @@ CREATE TABLE IF NOT EXISTS mapping.categorie_ratios (
 	name VARCHAR(255) UNIQUE NOT NULL
 );
 
-INSERT INTO mapping.categorie_ratios (name)
-VALUES
-	('Ratios Prudentiels'),
-	('risque credit'),
-	('risque de concentration')
-ON CONFLICT (name) DO NOTHING;
+
 
 -- Ratios family lookup table
 CREATE TABLE IF NOT EXISTS mapping.famille_ratios (
@@ -51,23 +46,7 @@ CREATE TABLE IF NOT EXISTS mapping.famille_ratios (
 	name VARCHAR(255) UNIQUE NOT NULL
 );
 
-INSERT INTO mapping.famille_ratios (name)
-VALUES
-	('Indicateurs de suivi de la qualité du portefeuille'),
-	('Indicateurs de suivi de la concentration du portefeuille de crédit'),
-	('Indicateurs de suivi des expositions sur l''interbancaire'),
-	('Indicateurs de suivi des exposition sur titres'),
-	('Indicateurs de solidité financière: Normes de solvabilité'),
-	('Indicateurs de solidité financière : Ratio de levier'),
-	('Indicateurs de solidité financière: Ratio de couverture des immobilisations et des participations'),
-	('Indicateurs de solidité financière: Ratios de liquidité'),
-	('Normes applicables au grands risques'),
-	('Limite des participations dans les entités commerciales'),
-	('Limite des immobilisations hors exploitation'),
-	('Limitation du total des immobilisations et des participations par rapport aux fonds propres'),
-	('Limitation des prêts aux principaux actionnaires, aux dirigeants, au personnel et aux commissaires aux comptes'),
-	('Indicateurs de solidité financière')
-ON CONFLICT (name) DO NOTHING;
+
 
 -- Dynamic financial ratios configuration table
 CREATE TABLE IF NOT EXISTS mapping.ratios_config (

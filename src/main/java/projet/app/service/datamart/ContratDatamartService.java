@@ -35,15 +35,35 @@ public class ContratDatamartService {
 
     @Transactional
     public LoadResult loadContratDatamart() {
+        log.info("[CONTRAT] Starting datamart load");
+
+        log.info("[CONTRAT] Ensuring datamart tables exist...");
         ensureDatamartTablesExist();
+        log.info("[CONTRAT] Datamart tables ready");
 
+        log.info("[CONTRAT] Populating sub_dim_agence...");
         int agenceRows = populateAgenceDimension();
-        int deviseRows = populateDeviseDimension();
-        int objetRows = upsertObjetFinanceDimension();
-        int typRows = populateTypContratDimension();
-        int dateRows = populateDateDimension();
+        log.info("[CONTRAT] sub_dim_agence done: {} rows", agenceRows);
 
+        log.info("[CONTRAT] Populating sub_dim_devise...");
+        int deviseRows = populateDeviseDimension();
+        log.info("[CONTRAT] sub_dim_devise done: {} rows", deviseRows);
+
+        log.info("[CONTRAT] Upserting sub_dim_objetfinance...");
+        int objetRows = upsertObjetFinanceDimension();
+        log.info("[CONTRAT] sub_dim_objetfinance done: {} rows", objetRows);
+
+        log.info("[CONTRAT] Populating sub_dim_typcontrat...");
+        int typRows = populateTypContratDimension();
+        log.info("[CONTRAT] sub_dim_typcontrat done: {} rows", typRows);
+
+        log.info("[CONTRAT] Populating sub_dim_date...");
+        int dateRows = populateDateDimension();
+        log.info("[CONTRAT] sub_dim_date done: {} rows", dateRows);
+
+        log.info("[CONTRAT] Populating dim_contrat...");
         int dimRows = populateDimContrat();
+        log.info("[CONTRAT] dim_contrat done: {} rows", dimRows);
 
         LoadResult result = new LoadResult();
         result.setSubDimAgenceRows(agenceRows);
@@ -53,7 +73,7 @@ public class ContratDatamartService {
         result.setSubDimDateRows(dateRows);
         result.setDimContratRows(dimRows);
 
-        log.info("Contrat datamart load completed: {}", result);
+        log.info("[CONTRAT] Datamart load completed: {}", result);
         return result;
     }
 
@@ -179,6 +199,7 @@ public class ContratDatamartService {
                 numagence INTEGER UNIQUE
             )
             """);
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_contrat_agence_num ON datamart.sub_dim_agence (numagence)");
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.sub_dim_devise (
@@ -186,6 +207,7 @@ public class ContratDatamartService {
                 devise TEXT UNIQUE
             )
             """);
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_contrat_devise ON datamart.sub_dim_devise (devise)");
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.sub_dim_objetfinance (
@@ -200,6 +222,7 @@ public class ContratDatamartService {
                 typcontrat TEXT UNIQUE
             )
             """);
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_contrat_typcontrat ON datamart.sub_dim_typcontrat (typcontrat)");
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.sub_dim_date (
@@ -207,6 +230,7 @@ public class ContratDatamartService {
                 date_value DATE UNIQUE
             )
             """);
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_contrat_date ON datamart.sub_dim_date (date_value)");
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.dim_contrat (
@@ -228,18 +252,10 @@ public class ContratDatamartService {
     private int populateAgenceDimension() {
         String sql = """
             INSERT INTO datamart.sub_dim_agence (numagence)
-            SELECT DISTINCT src.numagence
-            FROM (
-                SELECT NULLIF(TRIM(agence), '')::INTEGER AS numagence
-                FROM staging.stg_contrat_raw
-                WHERE NULLIF(TRIM(agence), '') ~ '^-?[0-9]+$'
-            ) src
-            WHERE src.numagence IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_agence a
-                  WHERE a.numagence = src.numagence
-              )
+            SELECT DISTINCT NULLIF(TRIM(agence), '')::INTEGER AS numagence
+            FROM staging.stg_contrat_raw
+            WHERE NULLIF(TRIM(agence), '') ~ '^-?[0-9]+$'
+            ON CONFLICT (numagence) DO NOTHING
             """;
         return jdbcTemplate.update(sql);
     }
@@ -247,17 +263,10 @@ public class ContratDatamartService {
     private int populateDeviseDimension() {
         String sql = """
             INSERT INTO datamart.sub_dim_devise (devise)
-            SELECT DISTINCT src.devise
-            FROM (
-                SELECT NULLIF(TRIM(devise), '') AS devise
-                FROM staging.stg_contrat_raw
-            ) src
-            WHERE src.devise IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_devise d
-                  WHERE d.devise = src.devise
-              )
+            SELECT DISTINCT NULLIF(TRIM(devise), '') AS devise
+            FROM staging.stg_contrat_raw
+            WHERE NULLIF(TRIM(devise), '') IS NOT NULL
+            ON CONFLICT (devise) DO NOTHING
             """;
         return jdbcTemplate.update(sql);
     }
@@ -293,17 +302,10 @@ public class ContratDatamartService {
     private int populateTypContratDimension() {
         String sql = """
             INSERT INTO datamart.sub_dim_typcontrat (typcontrat)
-            SELECT DISTINCT src.typcontrat
-            FROM (
-                SELECT NULLIF(TRIM(typcontrat), '') AS typcontrat
-                FROM staging.stg_contrat_raw
-            ) src
-            WHERE src.typcontrat IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_typcontrat tc
-                  WHERE tc.typcontrat = src.typcontrat
-              )
+            SELECT DISTINCT NULLIF(TRIM(typcontrat), '') AS typcontrat
+            FROM staging.stg_contrat_raw
+            WHERE NULLIF(TRIM(typcontrat), '') IS NOT NULL
+            ON CONFLICT (typcontrat) DO NOTHING
             """;
         return jdbcTemplate.update(sql);
     }
@@ -316,111 +318,84 @@ public class ContratDatamartService {
 
         String sql = """
             INSERT INTO datamart.sub_dim_date (date_value)
-            SELECT DISTINCT parsed.date_value
+            SELECT DISTINCT %s AS date_value
             FROM (
-                SELECT %s AS date_value
-                FROM (
-                    SELECT datouv AS raw_date FROM staging.stg_contrat_raw
-                    UNION ALL
-                    SELECT datech AS raw_date FROM staging.stg_contrat_raw
-                ) src
-            ) parsed
-            WHERE parsed.date_value IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_date dt
-                  WHERE dt.date_value = parsed.date_value
-              )
-            """.formatted(parseDateExpr);
+                SELECT datouv AS raw_date FROM staging.stg_contrat_raw
+                UNION ALL
+                SELECT datech AS raw_date FROM staging.stg_contrat_raw
+            ) src
+            WHERE %s IS NOT NULL
+            ON CONFLICT (date_value) DO NOTHING
+            """.formatted(parseDateExpr, parseDateExpr);
 
         return jdbcTemplate.update(sql);
     }
 
     private int populateDimContrat() {
-        String datouvExpr = parseDateExpression("t.datouv");
-        String datechExpr = parseDateExpression("t.datech");
+        String datouvExpr = parseDateExpression("datouv");
+        String datechExpr = parseDateExpression("datech");
 
-        String sql = """
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_contrat_prep");
+        jdbcTemplate.execute("""
+            CREATE TABLE staging.tmp_contrat_prep AS
+            SELECT
+                NULLIF(TRIM(t.idcontrat), '') AS idcontrat,
+                NULLIF(TRIM(t.idtiers), '') AS idtiers,
+                CASE WHEN NULLIF(TRIM(t.agence), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.agence), '')::INTEGER END AS numagence,
+                NULLIF(TRIM(t.devise), '') AS devise,
+                CASE WHEN NULLIF(TRIM(t.objetfinance), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.objetfinance), '')::BIGINT END AS objetfinance_id,
+                NULLIF(TRIM(t.typcontrat), '') AS typcontrat,
+                %s AS datouv_val,
+                %s AS datech_val,
+                CASE WHEN NULLIF(TRIM(t.ancienneteimpaye), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.ancienneteimpaye), '')::INTEGER END AS ancienneteimpaye,
+                CASE WHEN NULLIF(TRIM(t.tauxcontrat), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.tauxcontrat), '')::INTEGER END AS tauxcontrat,
+                CASE WHEN NULLIF(TRIM(t.actif), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.actif), '')::INTEGER END AS actif
+            FROM staging.stg_contrat_raw t
+            WHERE NULLIF(TRIM(t.idcontrat), '') IS NOT NULL
+            """.formatted(datouvExpr, datechExpr));
+
+        log.info("[CONTRAT] tmp_contrat_prep created, adding indexes...");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_contrat_prep (idcontrat)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_contrat_prep (idtiers)");
+        log.info("[CONTRAT] tmp_contrat_prep indexes ready, inserting into dim_contrat...");
+
+        String insertSql = """
             INSERT INTO datamart.dim_contrat (
-                id,
-                id_client,
-                id_agence,
-                id_devise,
-                id_objetfinance,
-                id_typcontrat,
-                id_dateouverture,
-                id_dateecheance,
-                ancienneteimpaye,
-                tauxcontrat,
-                actif
+                id, id_client, id_agence, id_devise, id_objetfinance,
+                id_typcontrat, id_dateouverture, id_dateecheance,
+                ancienneteimpaye, tauxcontrat, actif
             )
             SELECT
-                NULLIF(TRIM(t.idcontrat), '') AS id,
-                dc.idtiers AS id_client,
-                a.id AS id_agence,
-                d.id AS id_devise,
-                o.id AS id_objetfinance,
-                tc.id AS id_typcontrat,
-                dov.id AS id_dateouverture,
-                dech.id AS id_dateecheance,
-                CASE
-                    WHEN NULLIF(TRIM(t.ancienneteimpaye), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.ancienneteimpaye), '')::INTEGER
-                    ELSE NULL
-                END AS ancienneteimpaye,
-                CASE
-                    WHEN NULLIF(TRIM(t.tauxcontrat), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.tauxcontrat), '')::INTEGER
-                    ELSE NULL
-                END AS tauxcontrat,
-                CASE
-                    WHEN NULLIF(TRIM(t.actif), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.actif), '')::INTEGER
-                    ELSE NULL
-                END AS actif
-            FROM staging.stg_contrat_raw t
-            LEFT JOIN datamart.dim_client dc
-                   ON dc.idtiers = NULLIF(TRIM(t.idtiers), '')
-            LEFT JOIN (
-                SELECT numagence, MIN(id) AS id
-                FROM datamart.sub_dim_agence
-                GROUP BY numagence
-            ) a
-                   ON a.numagence = CASE
-                                        WHEN NULLIF(TRIM(t.agence), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.agence), '')::INTEGER
-                                        ELSE NULL
-                                    END
-            LEFT JOIN (
-                SELECT devise, MIN(id) AS id
-                FROM datamart.sub_dim_devise
-                GROUP BY devise
-            ) d
-                   ON d.devise = NULLIF(TRIM(t.devise), '')
-            LEFT JOIN datamart.sub_dim_objetfinance o
-                   ON o.id = CASE
-                                 WHEN NULLIF(TRIM(t.objetfinance), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.objetfinance), '')::BIGINT
-                                 ELSE NULL
-                             END
-            LEFT JOIN (
-                SELECT typcontrat, MIN(id) AS id
-                FROM datamart.sub_dim_typcontrat
-                GROUP BY typcontrat
-            ) tc
-                   ON tc.typcontrat = NULLIF(TRIM(t.typcontrat), '')
-            LEFT JOIN (
-                SELECT date_value, MIN(id) AS id
-                FROM datamart.sub_dim_date
-                GROUP BY date_value
-            ) dov
-                   ON dov.date_value = %s
-            LEFT JOIN (
-                SELECT date_value, MIN(id) AS id
-                FROM datamart.sub_dim_date
-                GROUP BY date_value
-            ) dech
-                   ON dech.date_value = %s
-            WHERE NULLIF(TRIM(t.idcontrat), '') IS NOT NULL
+                p.idcontrat,
+                dc.idtiers,
+                a.id,
+                d.id,
+                o.id,
+                tc.id,
+                dov.id,
+                dech.id,
+                p.ancienneteimpaye,
+                p.tauxcontrat,
+                p.actif
+            FROM staging.tmp_contrat_prep p
+            LEFT JOIN datamart.dim_client dc ON dc.idtiers = p.idtiers
+            LEFT JOIN datamart.sub_dim_agence a ON a.numagence = p.numagence
+            LEFT JOIN datamart.sub_dim_devise d ON d.devise = p.devise
+            LEFT JOIN datamart.sub_dim_objetfinance o ON o.id = p.objetfinance_id
+            LEFT JOIN datamart.sub_dim_typcontrat tc ON tc.typcontrat = p.typcontrat
+            LEFT JOIN datamart.sub_dim_date dov ON dov.date_value = p.datouv_val
+            LEFT JOIN datamart.sub_dim_date dech ON dech.date_value = p.datech_val
             ON CONFLICT (id) DO NOTHING
-            """.formatted(datouvExpr, datechExpr);
+            """;
 
-        return jdbcTemplate.update(sql);
+        int rows = jdbcTemplate.update(insertSql);
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_contrat_prep");
+        return rows;
     }
 
     private String parseDateExpression(String columnExpr) {

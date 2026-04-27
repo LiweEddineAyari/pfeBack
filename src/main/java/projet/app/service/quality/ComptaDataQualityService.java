@@ -354,7 +354,11 @@ public class ComptaDataQualityService {
                 SUM(
                     CASE
                         WHEN NULLIF(TRIM(soldeconvertie), '') IS NULL THEN 0::NUMERIC(38,10)
-                        ELSE NULLIF(TRIM(soldeconvertie), '')::DOUBLE PRECISION::NUMERIC(38,10)
+                        ELSE REPLACE(
+                                REGEXP_REPLACE(NULLIF(TRIM(soldeconvertie), ''), '[\\s\\u00A0]', '', 'g'),
+                                ',',
+                                '.'
+                             )::DOUBLE PRECISION::NUMERIC(38,10)
                     END
                 ),
                 0

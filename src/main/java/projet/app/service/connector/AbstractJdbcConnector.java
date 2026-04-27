@@ -325,6 +325,17 @@ public abstract class AbstractJdbcConnector implements DataSourceConnector {
         }
 
         String stringValue = value.toString();
+        if (stringValue != null) {
+            stringValue = stringValue.trim();
+        }
+
+        // Defensive: many sources represent missing numeric/date values as empty strings.
+        // Treat blank as SQL NULL for typed columns to avoid NumberFormatException.
+        if (stringValue == null || stringValue.isBlank()) {
+            statement.setObject(index, null);
+            return;
+        }
+
         switch (targetSqlType) {
             case Types.INTEGER, Types.SMALLINT, Types.TINYINT -> statement.setInt(index, Integer.parseInt(stringValue));
             case Types.BIGINT -> statement.setLong(index, Long.parseLong(stringValue));

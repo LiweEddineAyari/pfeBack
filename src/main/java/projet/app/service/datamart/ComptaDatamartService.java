@@ -23,15 +23,41 @@ public class ComptaDatamartService {
 
     @Transactional
     public LoadResult loadComptaDatamart() {
-        ensureDatamartTablesExist();
+        log.info("[COMPTA] Starting datamart load");
 
+        log.info("[COMPTA] Ensuring datamart tables exist...");
+        ensureDatamartTablesExist();
+        log.info("[COMPTA] Datamart tables ready");
+
+        log.info("[COMPTA] Populating sub_dim_agence...");
         int agenceRows = populateAgenceDimension();
+        log.info("[COMPTA] sub_dim_agence done: {} rows", agenceRows);
+
+        log.info("[COMPTA] Populating sub_dim_devise...");
         int deviseRows = populateDeviseDimension();
+        log.info("[COMPTA] sub_dim_devise done: {} rows", deviseRows);
+
+        log.info("[COMPTA] Populating sub_dim_chapitre...");
         int chapitreRows = populateChapitreDimension();
+        log.info("[COMPTA] sub_dim_chapitre done: {} rows", chapitreRows);
+
+        log.info("[COMPTA] Populating sub_dim_compte...");
         int compteRows = populateCompteDimension();
+        log.info("[COMPTA] sub_dim_compte done: {} rows", compteRows);
+
+        log.info("[COMPTA] Populating sub_dim_date...");
         int dateRows = populateDateDimension();
-        truncateFactBalance();
+        log.info("[COMPTA] sub_dim_date done: {} rows", dateRows);
+
+        long factCountBefore = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.fact_balance", Long.class);
+        log.info("[COMPTA] fact_balance row count BEFORE insert: {}", factCountBefore);
+
+        log.info("[COMPTA] Inserting into fact_balance (full-row uniqueness, skip exact duplicates)...");
         int factRows = populateFactBalance();
+        log.info("[COMPTA] fact_balance insert done: {} rows affected", factRows);
+
+        long factCountAfter = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.fact_balance", Long.class);
+        log.info("[COMPTA] fact_balance row count AFTER insert: {} (delta={})", factCountAfter, factCountAfter - factCountBefore);
 
         LoadResult result = new LoadResult();
         result.setSubDimAgenceRows(agenceRows);
@@ -41,13 +67,10 @@ public class ComptaDatamartService {
         result.setSubDimDateRows(dateRows);
         result.setFactBalanceRows(factRows);
 
-        log.info("Compta datamart load completed: {}", result);
+        log.info("[COMPTA] Datamart load completed: {}", result);
         return result;
     }
 
-    private void truncateFactBalance() {
-        jdbcTemplate.execute("TRUNCATE TABLE datamart.fact_balance");
-    }
 
     @Transactional(readOnly = true)
     public Map<String, Object> fetchBalanceList(int page, int size) {
@@ -221,19 +244,16 @@ public class ComptaDatamartService {
             )
             """);
 
-        // Keep existing environments in sync when table already exists with BIGINT.
         jdbcTemplate.execute("""
             ALTER TABLE datamart.fact_balance
             ALTER COLUMN soldeconvertie TYPE NUMERIC(38,10)
             USING soldeconvertie::NUMERIC(38,10)
             """);
 
-        // Replace old key with full-row uniqueness (all inserted columns except surrogate id).
-        jdbcTemplate.execute("""
-            DROP INDEX IF EXISTS datamart.ux_fact_balance_business_key
-            """);
+        jdbcTemplate.execute("DROP INDEX IF EXISTS datamart.ux_fact_balance_bk");
+        jdbcTemplate.execute("DROP INDEX IF EXISTS datamart.ux_fact_balance_business_key");
 
-        // Normalize historical data to one row per full inserted-row key.
+        // One row per full inserted payload (all columns except surrogate id), including id_date and measures.
         jdbcTemplate.execute("""
             DELETE FROM datamart.fact_balance fb
             WHERE fb.id IN (
@@ -265,7 +285,6 @@ public class ComptaDatamartService {
             )
             """);
 
-        // Full-row uniqueness for balance facts (all inserted columns except id).
         jdbcTemplate.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS ux_fact_balance_business_key
             ON datamart.fact_balance (
@@ -321,18 +340,10 @@ public class ComptaDatamartService {
     private int populateChapitreDimension() {
         String sql = """
             INSERT INTO datamart.sub_dim_chapitre (chapitre)
-            SELECT DISTINCT src.chapitre
-            FROM (
-                SELECT NULLIF(TRIM(chapitre), '')::BIGINT AS chapitre
-                FROM staging.stg_compta_raw
-                WHERE NULLIF(TRIM(chapitre), '') ~ '^-?[0-9]+$'
-            ) src
-            WHERE src.chapitre IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_chapitre ch
-                  WHERE ch.chapitre = src.chapitre
-              )
+            SELECT DISTINCT NULLIF(TRIM(chapitre), '')::BIGINT AS chapitre
+            FROM staging.stg_compta_raw
+            WHERE NULLIF(TRIM(chapitre), '') ~ '^-?[0-9]+$'
+            ON CONFLICT (chapitre) DO NOTHING
             """;
         return jdbcTemplate.update(sql);
     }
@@ -341,22 +352,13 @@ public class ComptaDatamartService {
         String sql = """
             INSERT INTO datamart.sub_dim_compte (numcompte, libellecompte)
             SELECT
-                src.numcompte,
-                src.libellecompte
-            FROM (
-                SELECT
-                    NULLIF(TRIM(compte), '')::BIGINT AS numcompte,
-                    MAX(NULLIF(TRIM(libellecompte), '')) AS libellecompte
-                FROM staging.stg_compta_raw
-                WHERE NULLIF(TRIM(compte), '') ~ '^-?[0-9]+$'
-                GROUP BY NULLIF(TRIM(compte), '')::BIGINT
-            ) src
-            WHERE src.numcompte IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM datamart.sub_dim_compte c
-                  WHERE c.numcompte = src.numcompte
-              )
+                NULLIF(TRIM(compte), '')::BIGINT AS numcompte,
+                MAX(NULLIF(TRIM(libellecompte), '')) AS libellecompte
+            FROM staging.stg_compta_raw
+            WHERE NULLIF(TRIM(compte), '') ~ '^-?[0-9]+$'
+            GROUP BY NULLIF(TRIM(compte), '')::BIGINT
+            ON CONFLICT (numcompte, libellecompte) DO UPDATE SET
+                libellecompte = EXCLUDED.libellecompte
             """;
         return jdbcTemplate.update(sql);
     }
@@ -380,114 +382,93 @@ public class ComptaDatamartService {
         return jdbcTemplate.update(sql);
     }
 
-    private int populateFactBalance() {
-        String parseDateExpr = parseDateExpression("t.date_bal");
-        String parseLongExpr = "CASE WHEN NULLIF(TRIM(%s), '') ~ '^-?[0-9]+(\\\\.[0-9]+)?([eE][+-]?[0-9]+)?$' " +
-                "THEN (NULLIF(TRIM(%s), '')::DOUBLE PRECISION)::BIGINT ELSE NULL END";
-        String parseDecimalExpr = "NULLIF(TRIM(%s), '')::DOUBLE PRECISION::NUMERIC(38,10)";
+    private String cleanNumericExpr(String col) {
+        return "REPLACE(REGEXP_REPLACE(NULLIF(TRIM(" + col + "), ''), '[\\s\\u00A0]', '', 'g'), ',', '.')";
+    }
 
-        String sql = """
-            WITH src AS (
-                SELECT
-                    a.id AS id_agence,
-                    d.id AS id_devise,
-                    db.id AS id_devisebnq,
-                    c.id AS id_compte,
-                    ch.id AS id_chapitre,
-                    dc.idtiers AS id_client,
-                    dct.id AS id_contrat,
-                    dt.id AS id_date,
-                    %s AS soldeorigine,
-                    %s AS soldeconvertie,
-                    %s AS cumulmvtdb,
-                    %s AS cumulmvtcr,
-                    %s AS soldeinitdebmois,
-                    %s AS amount,
-                    CASE
-                        WHEN NULLIF(TRIM(t.actif), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.actif), '')::INTEGER
-                        ELSE NULL
-                    END AS actif
-                FROM staging.stg_compta_raw t
-                LEFT JOIN datamart.sub_dim_agence a
-                       ON a.numagence = CASE
-                                            WHEN NULLIF(TRIM(t.agence), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.agence), '')::INTEGER
-                                            ELSE NULL
-                                        END
-                LEFT JOIN datamart.sub_dim_devise d
-                       ON d.devise = NULLIF(TRIM(t.devise), '')
-                LEFT JOIN datamart.sub_dim_devise db
-                       ON db.devise = NULLIF(TRIM(t.devisebbnq), '')
-                LEFT JOIN (
-                    SELECT numcompte, MIN(id) AS id
-                    FROM datamart.sub_dim_compte
-                    GROUP BY numcompte
-                ) c
-                       ON c.numcompte = CASE
-                                            WHEN NULLIF(TRIM(t.compte), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.compte), '')::BIGINT
-                                            ELSE NULL
-                                        END
-                LEFT JOIN (
-                    SELECT chapitre, MIN(id) AS id
-                    FROM datamart.sub_dim_chapitre
-                    GROUP BY chapitre
-                ) ch
-                       ON ch.chapitre = CASE
-                                            WHEN NULLIF(TRIM(t.chapitre), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.chapitre), '')::BIGINT
-                                            ELSE NULL
-                                        END
-                LEFT JOIN datamart.dim_client dc
-                       ON dc.idtiers = NULLIF(TRIM(t.idtiers), '')
-                LEFT JOIN datamart.dim_contrat dct
-                       ON dct.id = NULLIF(TRIM(t.idcontrat), '')
-                LEFT JOIN datamart.sub_dim_date dt
-                       ON dt.date_value = %s
-            )
+    private int populateFactBalance() {
+        String parseDateExpr = parseDateExpression("date_bal");
+
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_compta_prep");
+        jdbcTemplate.execute("""
+            CREATE TABLE staging.tmp_compta_prep AS
+            SELECT
+                CASE WHEN NULLIF(TRIM(t.agence), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.agence), '')::INTEGER END AS numagence,
+                NULLIF(TRIM(t.devise), '') AS devise,
+                NULLIF(TRIM(t.devisebbnq), '') AS devisebbnq,
+                CASE WHEN NULLIF(TRIM(t.compte), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.compte), '')::BIGINT END AS numcompte,
+                CASE WHEN NULLIF(TRIM(t.chapitre), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.chapitre), '')::BIGINT END AS chapitre,
+                NULLIF(TRIM(t.idtiers), '') AS idtiers,
+                NULLIF(TRIM(t.idcontrat), '') AS idcontrat,
+                %s AS date_val,
+                %s AS soldeorigine,
+                %s AS soldeconvertie,
+                %s AS cumulmvtdb,
+                %s AS cumulmvtcr,
+                %s AS soldeinitdebmois,
+                %s AS amount,
+                CASE WHEN NULLIF(TRIM(t.actif), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.actif), '')::INTEGER END AS actif
+            FROM staging.stg_compta_raw t
+            """.formatted(
+                parseDateExpr,
+                cleanLongExpr("t.soldeorigine"),
+                cleanDecimalExpr("t.soldeconvertie"),
+                cleanLongExpr("t.cumulmvtdb"),
+                cleanLongExpr("t.cumulmvtcr"),
+                cleanLongExpr("t.soldeinitdebmois"),
+                cleanLongExpr("t.amount")
+            ));
+
+        log.info("[COMPTA] tmp_compta_prep created, adding indexes...");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_compta_prep (idtiers)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_compta_prep (idcontrat)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_compta_prep (numcompte)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_compta_prep (chapitre)");
+        log.info("[COMPTA] tmp_compta_prep indexes ready, inserting into fact_balance...");
+
+        String insertSql = """
             INSERT INTO datamart.fact_balance (
-                id_agence,
-                id_devise,
-                id_devisebnq,
-                id_compte,
-                id_chapitre,
-                id_client,
-                id_contrat,
-                id_date,
-                soldeorigine,
-                soldeconvertie,
-                cumulmvtdb,
-                cumulmvtcr,
-                soldeinitdebmois,
-                amount,
-                actif
+                id_agence, id_devise, id_devisebnq, id_compte, id_chapitre,
+                id_client, id_contrat, id_date,
+                soldeorigine, soldeconvertie, cumulmvtdb, cumulmvtcr,
+                soldeinitdebmois, amount, actif
             )
             SELECT
-                src.id_agence,
-                src.id_devise,
-                src.id_devisebnq,
-                src.id_compte,
-                src.id_chapitre,
-                src.id_client,
-                src.id_contrat,
-                src.id_date,
-                src.soldeorigine,
-                src.soldeconvertie,
-                src.cumulmvtdb,
-                src.cumulmvtcr,
-                src.soldeinitdebmois,
-                src.amount,
-                src.actif
-            FROM src
+                a.id, d.id, db.id, c.id, ch.id,
+                dc.idtiers, dct.id, dt.id,
+                p.soldeorigine, p.soldeconvertie, p.cumulmvtdb, p.cumulmvtcr,
+                p.soldeinitdebmois, p.amount, p.actif
+            FROM staging.tmp_compta_prep p
+            LEFT JOIN datamart.sub_dim_agence a ON a.numagence = p.numagence
+            LEFT JOIN datamart.sub_dim_devise d ON d.devise = p.devise
+            LEFT JOIN datamart.sub_dim_devise db ON db.devise = p.devisebbnq
+            LEFT JOIN datamart.sub_dim_compte c ON c.numcompte = p.numcompte
+            LEFT JOIN datamart.sub_dim_chapitre ch ON ch.chapitre = p.chapitre
+            LEFT JOIN datamart.dim_client dc ON dc.idtiers = p.idtiers
+            LEFT JOIN datamart.dim_contrat dct ON dct.id = p.idcontrat
+            LEFT JOIN datamart.sub_dim_date dt ON dt.date_value = p.date_val
             ON CONFLICT DO NOTHING
-            """.formatted(
-                parseLongExpr.formatted("t.soldeorigine", "t.soldeorigine"),
-                parseDecimalExpr.formatted("t.soldeconvertie"),
-                parseLongExpr.formatted("t.cumulmvtdb", "t.cumulmvtdb"),
-                parseLongExpr.formatted("t.cumulmvtcr", "t.cumulmvtcr"),
-                parseLongExpr.formatted("t.soldeinitdebmois", "t.soldeinitdebmois"),
-                parseLongExpr.formatted("t.amount", "t.amount"),
-                parseDateExpr
-            );
+            """;
 
-        return jdbcTemplate.update(sql);
+        int rows = jdbcTemplate.update(insertSql);
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_compta_prep");
+        return rows;
+    }
+
+    private String cleanLongExpr(String col) {
+        String cleaned = cleanNumericExpr(col);
+        return "CASE WHEN " + cleaned + " ~ '^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$' " +
+                "THEN (" + cleaned + "::DOUBLE PRECISION)::BIGINT ELSE NULL END";
+    }
+
+    private String cleanDecimalExpr(String col) {
+        String cleaned = cleanNumericExpr(col);
+        return "CASE WHEN NULLIF(TRIM(" + col + "), '') IS NULL THEN NULL " +
+                "ELSE " + cleaned + "::DOUBLE PRECISION::NUMERIC(38,10) END";
     }
 
     private String parseDateExpression(String columnExpr) {

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import projet.app.dto.LoadFromDbRequest;
 import projet.app.dto.LoadFromDbResponse;
@@ -42,6 +43,7 @@ public class EtlController {
     private final TiersDatamartService tiersDatamartService;
     private final ContratDatamartService contratDatamartService;
     private final ComptaDatamartService comptaDatamartService;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * Load TIERS, CONTRAT and COMPTA staging tables in one call.
@@ -536,27 +538,42 @@ public class EtlController {
             comptaResult.put("durationMs", System.currentTimeMillis() - comptaStart);
             tableResults.put("COMPTA", comptaResult);
 
-            return ResponseEntity.ok(Map.of(
-                    "status", "COMPLETED",
-                    "sequence", List.of(
-                            "TIERS.datamart",
-                            "CONTRAT.datamart",
-                            "COMPTA.datamart"
-                    ),
-                    "totalDurationMs", System.currentTimeMillis() - pipelineStart,
-                    "tables", tableResults
-            ));
+            etlService.resetStagingSchema();
+
+            Map<String, Object> actualCounts = new LinkedHashMap<>();
+            actualCounts.put("dim_client", jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.dim_client", Long.class));
+            actualCounts.put("dim_contrat", jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.dim_contrat", Long.class));
+            actualCounts.put("fact_balance", jdbcTemplate.queryForObject("SELECT COUNT(*) FROM datamart.fact_balance", Long.class));
+            log.info("Datamart actual DB counts after pipeline: {}", actualCounts);
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("status", "COMPLETED");
+            response.put("sequence", List.of("TIERS.datamart", "CONTRAT.datamart", "COMPTA.datamart"));
+            response.put("totalDurationMs", System.currentTimeMillis() - pipelineStart);
+            response.put("tables", tableResults);
+            response.put("actualDbCounts", actualCounts);
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error during merged datamart pipeline after step {}: {}", lastCompletedStep, e.getMessage(), e);
+            Throwable root = rootCause(e);
+            log.error("Error during merged datamart pipeline after step {}: {}", lastCompletedStep, root.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "status", "ERROR",
                     "lastCompletedStep", lastCompletedStep,
                     "totalDurationMs", System.currentTimeMillis() - pipelineStart,
                     "tables", tableResults,
-                    "message", e.getMessage()
+                    "exception", root.getClass().getName(),
+                    "message", root.getMessage() != null ? root.getMessage() : "Unknown error"
             ));
         }
+    }
+
+    private Throwable rootCause(Throwable t) {
+        Throwable cur = t;
+        while (cur.getCause() != null && cur.getCause() != cur) {
+            cur = cur.getCause();
+        }
+        return cur;
     }
 
     /**

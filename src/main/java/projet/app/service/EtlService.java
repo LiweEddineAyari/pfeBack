@@ -542,6 +542,15 @@ public class EtlService {
             """);
     }
 
+    /**
+     * Deletes all objects inside the staging schema after a successful pipeline.
+     * Recreates the schema so the next ETL run can recreate tables as needed.
+     */
+    public void resetStagingSchema() {
+        jdbcTemplate.execute("DROP SCHEMA IF EXISTS staging CASCADE");
+        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS staging");
+    }
+
     private record TableLoadPlan(
             IngestionType type,
             String sourceTable,

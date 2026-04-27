@@ -145,15 +145,39 @@ public class TiersDatamartService {
 
     @Transactional
     public LoadResult loadTiersDatamart() {
+        log.info("[TIERS] Starting datamart load");
+
+        log.info("[TIERS] Ensuring datamart tables exist...");
         ensureDatamartTablesExist();
+        log.info("[TIERS] Datamart tables ready");
 
+        log.info("[TIERS] Creating staging indexes for join performance...");
+        createStagingIndexes();
+        log.info("[TIERS] Staging indexes ready");
+
+        log.info("[TIERS] Upserting sub_dim_agenteco...");
         int agentecoRows = upsertLabelDimension("sub_dim_agenteco", AGENTECO_LIBELLE);
-        int sectionRows = upsertLabelDimension("sub_dim_sectionactivite", SECTION_ACTIVITE_LIBELLE);
-        int residenceRows = populateResidenceDimension();
-        int douteuxRows = populateDouteuxDimension();
-        int grpAffRows = populateGrpAffaireDimension();
+        log.info("[TIERS] sub_dim_agenteco done: {} rows", agentecoRows);
 
+        log.info("[TIERS] Upserting sub_dim_sectionactivite...");
+        int sectionRows = upsertLabelDimension("sub_dim_sectionactivite", SECTION_ACTIVITE_LIBELLE);
+        log.info("[TIERS] sub_dim_sectionactivite done: {} rows", sectionRows);
+
+        log.info("[TIERS] Populating sub_dim_residence...");
+        int residenceRows = populateResidenceDimension();
+        log.info("[TIERS] sub_dim_residence done: {} rows", residenceRows);
+
+        log.info("[TIERS] Populating sub_dim_douteux...");
+        int douteuxRows = populateDouteuxDimension();
+        log.info("[TIERS] sub_dim_douteux done: {} rows", douteuxRows);
+
+        log.info("[TIERS] Populating sub_dim_grpaffaire...");
+        int grpAffRows = populateGrpAffaireDimension();
+        log.info("[TIERS] sub_dim_grpaffaire done: {} rows", grpAffRows);
+
+        log.info("[TIERS] Populating dim_client...");
         int dimClientRows = populateDimClient();
+        log.info("[TIERS] dim_client done: {} rows", dimClientRows);
 
         LoadResult result = new LoadResult();
         result.setSubDimResidenceRows(residenceRows);
@@ -163,7 +187,7 @@ public class TiersDatamartService {
         result.setSubDimSectionactiviteRows(sectionRows);
         result.setDimClientRows(dimClientRows);
 
-        log.info("Datamart load completed: {}", result);
+        log.info("[TIERS] Datamart load completed: {}", result);
         return result;
     }
 
@@ -375,24 +399,15 @@ public class TiersDatamartService {
 
         String sql = Objects.requireNonNull("""
             INSERT INTO datamart.sub_dim_residence (pays, residence, geo)
-            SELECT src.pays, src.residence, src.geo
-            FROM (
-                SELECT DISTINCT
-                    NULLIF(TRIM(t.nationalite), '') AS pays,
-                    NULLIF(TRIM(t.residence), '') AS residence,
-                    %s AS geo
-                FROM staging.stg_tiers_raw t
-                WHERE NULLIF(TRIM(t.nationalite), '') IS NOT NULL
-                   OR NULLIF(TRIM(t.residence), '') IS NOT NULL
-                   OR t.residencenum IS NOT NULL
-            ) src
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM datamart.sub_dim_residence r
-                WHERE r.pays IS NOT DISTINCT FROM src.pays
-                  AND r.residence IS NOT DISTINCT FROM src.residence
-                  AND r.geo IS NOT DISTINCT FROM src.geo
-            )
+            SELECT DISTINCT
+                NULLIF(TRIM(t.nationalite), '') AS pays,
+                NULLIF(TRIM(t.residence), '') AS residence,
+                %s AS geo
+            FROM staging.stg_tiers_raw t
+            WHERE NULLIF(TRIM(t.nationalite), '') IS NOT NULL
+               OR NULLIF(TRIM(t.residence), '') IS NOT NULL
+               OR t.residencenum IS NOT NULL
+            ON CONFLICT (pays, residence, geo) DO NOTHING
             """.formatted(geoExpr));
 
         return jdbcTemplate.update(sql);
@@ -401,28 +416,20 @@ public class TiersDatamartService {
     private int populateDouteuxDimension() {
         String sql = """
             INSERT INTO datamart.sub_dim_douteux (douteux, datdouteux)
-            SELECT src.douteux, src.datdouteux
-            FROM (
-                SELECT DISTINCT
-                    CASE
-                        WHEN NULLIF(TRIM(t.douteux), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.douteux), '')::INTEGER
-                        ELSE NULL
-                    END AS douteux,
-                    CASE
-                        WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN TO_DATE(NULLIF(TRIM(t.datdouteux), ''), 'DD/MM/YYYY')
-                        WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN NULLIF(TRIM(t.datdouteux), '')::DATE
-                        ELSE NULL
-                    END AS datdouteux
-                FROM staging.stg_tiers_raw t
-                WHERE NULLIF(TRIM(t.douteux), '') IS NOT NULL
-                   OR NULLIF(TRIM(t.datdouteux), '') IS NOT NULL
-            ) src
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM datamart.sub_dim_douteux d
-                WHERE d.douteux IS NOT DISTINCT FROM src.douteux
-                  AND d.datdouteux IS NOT DISTINCT FROM src.datdouteux
-            )
+            SELECT DISTINCT
+                CASE
+                    WHEN NULLIF(TRIM(t.douteux), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.douteux), '')::INTEGER
+                    ELSE NULL
+                END AS douteux,
+                CASE
+                    WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN TO_DATE(NULLIF(TRIM(t.datdouteux), ''), 'DD/MM/YYYY')
+                    WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN NULLIF(TRIM(t.datdouteux), '')::DATE
+                    ELSE NULL
+                END AS datdouteux
+            FROM staging.stg_tiers_raw t
+            WHERE NULLIF(TRIM(t.douteux), '') IS NOT NULL
+               OR NULLIF(TRIM(t.datdouteux), '') IS NOT NULL
+            ON CONFLICT (douteux, datdouteux) DO NOTHING
             """;
 
         return jdbcTemplate.update(sql);
@@ -443,62 +450,85 @@ public class TiersDatamartService {
     }
 
     private int populateDimClient() {
-        String geoExpr = geoExpression("t.residencenum");
+        String geoExpr = geoExpression("residencenum");
 
-        String sql = Objects.requireNonNull("""
-            INSERT INTO datamart.dim_client (
-                idtiers,
-                id_residence,
-                id_agenteco,
-                id_douteux,
-                id_grpaffaire,
-                id_sectionactivite,
-                nomprenom,
-                raisonsoc,
-                chiffreaffaires
-            )
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_tiers_prep");
+        jdbcTemplate.execute(Objects.requireNonNull("""
+            CREATE TABLE staging.tmp_tiers_prep AS
             SELECT
                 NULLIF(TRIM(t.idtiers), '') AS idtiers,
-                sr.id AS id_residence,
-                sae.id AS id_agenteco,
-                sd.id AS id_douteux,
-                sga.id AS id_grpaffaire,
-                ssa.id AS id_sectionactivite,
+                NULLIF(TRIM(t.nationalite), '') AS pays,
+                NULLIF(TRIM(t.residence), '') AS residence,
+                %s AS geo,
+                CASE WHEN NULLIF(TRIM(t.agenteco), '') ~ '^[0-9]+$'
+                     THEN NULLIF(TRIM(t.agenteco), '')::BIGINT END AS agenteco_id,
+                CASE WHEN NULLIF(TRIM(t.sectionactivite), '') ~ '^[0-9]+$'
+                     THEN NULLIF(TRIM(t.sectionactivite), '')::BIGINT END AS section_id,
+                t.grpaffaires,
+                CASE WHEN NULLIF(TRIM(t.douteux), '') ~ '^-?[0-9]+$'
+                     THEN NULLIF(TRIM(t.douteux), '')::INTEGER END AS douteux_val,
+                CASE WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{2}/\\d{2}/\\d{4}$'
+                          THEN TO_DATE(NULLIF(TRIM(t.datdouteux), ''), 'DD/MM/YYYY')
+                     WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                          THEN NULLIF(TRIM(t.datdouteux), '')::DATE
+                     END AS datdouteux_val,
                 NULLIF(TRIM(t.nomprenom), '') AS nomprenom,
                 NULLIF(TRIM(t.raisonsoc), '') AS raisonsoc,
                 NULLIF(TRIM(t.chiffreaffaires), '') AS chiffreaffaires
             FROM staging.stg_tiers_raw t
-            LEFT JOIN datamart.sub_dim_residence sr
-                   ON sr.pays = NULLIF(TRIM(t.nationalite), '')
-                  AND sr.residence = NULLIF(TRIM(t.residence), '')
-                  AND sr.geo = %s
-            LEFT JOIN datamart.sub_dim_agenteco sae
-                   ON sae.id = CASE
-                                   WHEN NULLIF(TRIM(t.agenteco), '') ~ '^[0-9]+$' THEN NULLIF(TRIM(t.agenteco), '')::BIGINT
-                                   ELSE NULL
-                               END
-            LEFT JOIN datamart.sub_dim_sectionactivite ssa
-                   ON ssa.id = CASE
-                                   WHEN NULLIF(TRIM(t.sectionactivite), '') ~ '^[0-9]+$' THEN NULLIF(TRIM(t.sectionactivite), '')::BIGINT
-                                   ELSE NULL
-                               END
-            LEFT JOIN datamart.sub_dim_grpaffaire sga
-                   ON sga.id = t.grpaffaires::BIGINT
-            LEFT JOIN datamart.sub_dim_douteux sd
-                   ON sd.douteux IS NOT DISTINCT FROM CASE
-                                                          WHEN NULLIF(TRIM(t.douteux), '') ~ '^-?[0-9]+$' THEN NULLIF(TRIM(t.douteux), '')::INTEGER
-                                                          ELSE NULL
-                                                      END
-                  AND sd.datdouteux IS NOT DISTINCT FROM CASE
-                                                             WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN TO_DATE(NULLIF(TRIM(t.datdouteux), ''), 'DD/MM/YYYY')
-                                                             WHEN NULLIF(TRIM(t.datdouteux), '') ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN NULLIF(TRIM(t.datdouteux), '')::DATE
-                                                             ELSE NULL
-                                                         END
             WHERE NULLIF(TRIM(t.idtiers), '') IS NOT NULL
-            ON CONFLICT (idtiers) DO NOTHING
-            """.formatted(geoExpr));
+            """.formatted(geoExpr)));
 
-        return jdbcTemplate.update(sql);
+        log.info("[TIERS] tmp_tiers_prep created, adding indexes...");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_tiers_prep (idtiers)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_tiers_prep (pays, residence, geo)");
+        jdbcTemplate.execute("CREATE INDEX ON staging.tmp_tiers_prep (douteux_val, datdouteux_val)");
+        log.info("[TIERS] tmp_tiers_prep indexes ready, inserting into dim_client...");
+
+        String insertSql = """
+            INSERT INTO datamart.dim_client (
+                idtiers, id_residence, id_agenteco, id_douteux,
+                id_grpaffaire, id_sectionactivite,
+                nomprenom, raisonsoc, chiffreaffaires
+            )
+            SELECT
+                p.idtiers,
+                sr.id,
+                sae.id,
+                sd.id,
+                sga.id,
+                ssa.id,
+                p.nomprenom,
+                p.raisonsoc,
+                p.chiffreaffaires
+            FROM staging.tmp_tiers_prep p
+            LEFT JOIN datamart.sub_dim_residence sr
+                   ON sr.pays IS NOT DISTINCT FROM p.pays
+                  AND sr.residence IS NOT DISTINCT FROM p.residence
+                  AND sr.geo IS NOT DISTINCT FROM p.geo
+            LEFT JOIN datamart.sub_dim_agenteco sae ON sae.id = p.agenteco_id
+            LEFT JOIN datamart.sub_dim_sectionactivite ssa ON ssa.id = p.section_id
+            LEFT JOIN datamart.sub_dim_grpaffaire sga ON sga.id = p.grpaffaires
+            LEFT JOIN datamart.sub_dim_douteux sd
+                   ON sd.douteux IS NOT DISTINCT FROM p.douteux_val
+                  AND sd.datdouteux IS NOT DISTINCT FROM p.datdouteux_val
+            ON CONFLICT (idtiers) DO NOTHING
+            """;
+
+        int rows = jdbcTemplate.update(insertSql);
+
+        jdbcTemplate.execute("DROP TABLE IF EXISTS staging.tmp_tiers_prep");
+        return rows;
+    }
+
+    private void createStagingIndexes() {
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_tiers_idtiers ON staging.stg_tiers_raw (idtiers)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_tiers_grpaffaires ON staging.stg_tiers_raw (grpaffaires)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_tiers_residencenum ON staging.stg_tiers_raw (residencenum)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_contrat_idtiers ON staging.stg_contrat_raw (idtiers)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_contrat_idcontrat ON staging.stg_contrat_raw (idcontrat)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_compta_idtiers ON staging.stg_compta_raw (idtiers)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS ix_stg_compta_idcontrat ON staging.stg_compta_raw (idcontrat)");
     }
 
     private String geoExpression(String residenceNumExpr) {
