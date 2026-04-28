@@ -1,6 +1,7 @@
 package projet.app.service.connector;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import projet.app.dto.ColumnMeta;
@@ -26,6 +27,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RequiredArgsConstructor
 public abstract class AbstractJdbcConnector implements DataSourceConnector {
 
@@ -83,21 +85,43 @@ public abstract class AbstractJdbcConnector implements DataSourceConnector {
             "Target datasource is not configured"
         );
 
-           Connection targetConnection = DataSourceUtils.getConnection(targetDataSource);
-           try (Connection sourceConnection = connectionFactory.createConnection(connectionRequest);
-               Statement sourceStatement = sourceConnection.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+        String targetTable = req.getTargetTable();
+        validateTableName(targetTable);
 
-            String targetTable = req.getTargetTable();
-            validateTableName(targetTable);
+        Connection targetConnection = DataSourceUtils.getConnection(targetDataSource);
+        boolean ownsTransaction = false;
+        boolean previousAutoCommit = true;
+
+        try (Connection sourceConnection = connectionFactory.createConnection(connectionRequest);
+             Statement sourceStatement = sourceConnection.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+
             ensureTargetTableExists(targetConnection, req.getType(), targetTable);
 
             if (!tableExists(sourceConnection, connectionRequest.getTable())) {
                 throw new IllegalArgumentException("Table not found: " + connectionRequest.getTable());
             }
 
+            // Prefer a server-side cursor on the source so very large tables don't have to be
+            // materialised in memory (only effective when the source driver actually streams).
             sourceStatement.setFetchSize(BATCH_SIZE);
 
+            // Take ownership of the target transaction unless Spring already owns it.
+            // Running the entire load as a single transaction guarantees all-or-nothing
+            // semantics: a failure cannot leave the staging table partially populated, and
+            // we eliminate the class of bugs where a single bad row in the last batch can
+            // be silently committed away under autoCommit=true.
+            if (!DataSourceUtils.isConnectionTransactional(targetConnection, targetDataSource)) {
+                previousAutoCommit = targetConnection.getAutoCommit();
+                if (previousAutoCommit) {
+                    targetConnection.setAutoCommit(false);
+                    ownsTransaction = true;
+                }
+            }
+
+            long beforeTargetCount = countRows(targetConnection, targetTable);
+
             String selectSql = "SELECT * FROM " + connectionRequest.getTable();
+            int iteratedRows;
             try (ResultSet resultSet = sourceStatement.executeQuery(selectSql)) {
                 ResultSetMetaData sourceMeta = resultSet.getMetaData();
                 validateSourceColumns(mapping, sourceMeta);
@@ -115,38 +139,176 @@ public abstract class AbstractJdbcConnector implements DataSourceConnector {
 
                 validateTargetColumns(targetColumns, targetTypeByColumn);
 
+                LocalDate dateBal = appendDerivedDateBal
+                        ? LocalDate.parse(req.getDateBal(), DATE_FORMATTER)
+                        : null;
+
                 String insertSql = buildInsertSql(targetTable, targetColumns);
-                try (PreparedStatement insertStatement = targetConnection.prepareStatement(insertSql)) {
-                    int batchCount = 0;
-                    while (resultSet.next()) {
-                        int index = 1;
-                        for (String sourceColumn : sourceColumns) {
-                            String targetColumn = mapping.get(sourceColumn);
-                            Object value = resultSet.getObject(sourceColumn);
-                            setPreparedValue(insertStatement, index++, value, targetTypeByColumn.get(targetColumn.toLowerCase()));
-                        }
-
-                        if (appendDerivedDateBal) {
-                            LocalDate dateBal = LocalDate.parse(req.getDateBal(), DATE_FORMATTER);
-                            insertStatement.setObject(index, dateBal);
-                        }
-
-                        insertStatement.addBatch();
-                        batchCount++;
-                        if (batchCount % BATCH_SIZE == 0) {
-                            insertStatement.executeBatch();
-                        }
-                    }
-                    if (batchCount % BATCH_SIZE != 0) {
-                        insertStatement.executeBatch();
-                    }
-                }
+                iteratedRows = streamAndInsert(
+                        resultSet,
+                        targetConnection,
+                        insertSql,
+                        sourceColumns,
+                        mapping,
+                        targetTypeByColumn,
+                        appendDerivedDateBal,
+                        dateBal
+                );
             }
 
+            long afterTargetCount = countRows(targetConnection, targetTable);
+            long targetDelta = afterTargetCount - beforeTargetCount;
+
+            // Hard invariant: every row we iterated from the source MUST be present in the
+            // target table after the batch flushes. Any drift here would have been
+            // impossible to detect under the previous implementation.
+            if (targetDelta != iteratedRows) {
+                throw new IllegalStateException(String.format(
+                        "Row count mismatch loading %s -> %s: iterated=%d, target delta=%d (before=%d, after=%d). "
+                                + "This indicates a row was silently dropped during batch insert.",
+                        connectionRequest.getTable(), targetTable,
+                        iteratedRows, targetDelta, beforeTargetCount, afterTargetCount
+                ));
+            }
+
+            // Best-effort cross-check against the source side. If the source row count differs
+            // from what we iterated, surface it loudly so we can investigate (driver streaming
+            // bug, concurrent writes, etc.) rather than silently shipping a short load.
+            Long sourceCount = sourceRowCount(sourceConnection, connectionRequest.getTable());
+            if (sourceCount != null && sourceCount != iteratedRows) {
+                throw new IllegalStateException(String.format(
+                        "Row count mismatch loading %s -> %s: source COUNT(*)=%d but iterated=%d. "
+                                + "Refusing to commit a partial load.",
+                        connectionRequest.getTable(), targetTable, sourceCount, iteratedRows
+                ));
+            }
+
+            if (ownsTransaction) {
+                targetConnection.commit();
+            }
+
+            log.info(
+                    "Connector load OK: source={}, target={}, sourceCount={}, iterated={}, targetDelta={}",
+                    connectionRequest.getTable(), targetTable,
+                    sourceCount == null ? "?" : sourceCount,
+                    iteratedRows, targetDelta
+            );
+
         } catch (SQLException e) {
+            rollbackQuietly(targetConnection, ownsTransaction);
             throw new RuntimeException("Failed to load data from source database", e);
+        } catch (RuntimeException e) {
+            rollbackQuietly(targetConnection, ownsTransaction);
+            throw e;
         } finally {
+            if (ownsTransaction) {
+                try {
+                    targetConnection.setAutoCommit(previousAutoCommit);
+                } catch (SQLException restoreError) {
+                    log.warn("Failed to restore autoCommit on target connection: {}", restoreError.getMessage());
+                }
+            }
             DataSourceUtils.releaseConnection(targetConnection, targetDataSource);
+        }
+    }
+
+    private int streamAndInsert(
+            ResultSet resultSet,
+            Connection targetConnection,
+            String insertSql,
+            List<String> sourceColumns,
+            Map<String, String> mapping,
+            Map<String, Integer> targetTypeByColumn,
+            boolean appendDerivedDateBal,
+            LocalDate dateBal) throws SQLException {
+
+        try (PreparedStatement insertStatement = targetConnection.prepareStatement(insertSql)) {
+            int iterated = 0;
+            int pendingInBatch = 0;
+            while (resultSet.next()) {
+                int index = 1;
+                for (String sourceColumn : sourceColumns) {
+                    String targetColumn = mapping.get(sourceColumn);
+                    Object value = resultSet.getObject(sourceColumn);
+                    setPreparedValue(insertStatement, index++, value, targetTypeByColumn.get(targetColumn.toLowerCase()));
+                }
+
+                if (appendDerivedDateBal) {
+                    insertStatement.setObject(index, dateBal);
+                }
+
+                insertStatement.addBatch();
+                iterated++;
+                pendingInBatch++;
+                if (pendingInBatch >= BATCH_SIZE) {
+                    flushBatch(insertStatement, pendingInBatch);
+                    pendingInBatch = 0;
+                }
+            }
+            if (pendingInBatch > 0) {
+                flushBatch(insertStatement, pendingInBatch);
+            }
+            return iterated;
+        }
+    }
+
+    /**
+     * Execute the pending batch and verify the JDBC driver accepted every row.
+     * If the driver returns EXECUTE_FAILED for any row, throw immediately so the
+     * surrounding transaction is rolled back instead of producing a partial load.
+     */
+    private void flushBatch(PreparedStatement insertStatement, int expected) throws SQLException {
+        int[] results = insertStatement.executeBatch();
+        if (results.length != expected) {
+            throw new SQLException(String.format(
+                    "Batch insert returned %d update counts but %d rows were submitted",
+                    results.length, expected
+            ));
+        }
+        for (int i = 0; i < results.length; i++) {
+            int r = results[i];
+            if (r == Statement.EXECUTE_FAILED) {
+                throw new SQLException("Batch insert reported EXECUTE_FAILED for row " + i + " of the current batch");
+            }
+        }
+    }
+
+    private void rollbackQuietly(Connection connection, boolean ownsTransaction) {
+        if (!ownsTransaction || connection == null) {
+            return;
+        }
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackError) {
+            log.warn("Failed to rollback target transaction: {}", rollbackError.getMessage());
+        }
+    }
+
+    private long countRows(Connection connection, String qualifiedTable) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM " + qualifiedTable)) {
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+            return 0L;
+        }
+    }
+
+    /**
+     * Return the source row count, or null when it can't be determined cheaply.
+     * Any error here is downgraded to a warning so we don't fail an otherwise
+     * valid load just because we couldn't double-check the source size.
+     */
+    private Long sourceRowCount(Connection sourceConnection, String qualifiedTable) {
+        try (Statement statement = sourceConnection.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM " + qualifiedTable)) {
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+            return null;
+        } catch (SQLException e) {
+            log.warn("Could not compute source row count for {}: {}", qualifiedTable, e.getMessage());
+            return null;
         }
     }
 

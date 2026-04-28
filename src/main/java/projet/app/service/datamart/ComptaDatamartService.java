@@ -218,10 +218,12 @@ public class ComptaDatamartService {
             )
             """);
 
-        jdbcTemplate.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_sub_dim_compte_num_libelle
-            ON datamart.sub_dim_compte (numcompte, libellecompte)
-            """);
+        // Migration: enforce one row per numcompte (libellecompte is descriptive metadata only).
+        // Previously the table was declared UNIQUE (numcompte, libellecompte), which let a
+        // single account end up with multiple rows when its libellé changed between months.
+        // That in turn multiplied rows in fact_balance because populateFactBalance joins on
+        // numcompte alone.
+        migrateSubDimCompteToNumcompteUnique();
 
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.fact_balance (
@@ -357,10 +359,77 @@ public class ComptaDatamartService {
             FROM staging.stg_compta_raw
             WHERE NULLIF(TRIM(compte), '') ~ '^-?[0-9]+$'
             GROUP BY NULLIF(TRIM(compte), '')::BIGINT
-            ON CONFLICT (numcompte, libellecompte) DO UPDATE SET
-                libellecompte = EXCLUDED.libellecompte
+            ON CONFLICT (numcompte) DO UPDATE SET
+                libellecompte = COALESCE(EXCLUDED.libellecompte, datamart.sub_dim_compte.libellecompte)
             """;
         return jdbcTemplate.update(sql);
+    }
+
+    /**
+     * One-time, idempotent migration that converts the historical
+     * UNIQUE (numcompte, libellecompte) constraint on datamart.sub_dim_compte
+     * into a UNIQUE (numcompte) constraint.
+     *
+     * Steps:
+     *   1. For every numcompte that has multiple rows, keep the row with the smallest id
+     *      and repoint any fact_balance.id_compte values that referenced the losing rows
+     *      to the kept row.
+     *   2. Delete the now-orphaned losing rows from sub_dim_compte.
+     *   3. Drop the legacy compound uniqueness (constraint + index).
+     *   4. Add a new uniqueness on numcompte alone.
+     *
+     * This is safe to run on every startup: when there are no duplicates the
+     * UPDATE/DELETE statements simply affect zero rows and the constraints are
+     * created with IF NOT EXISTS / IF EXISTS guards.
+     */
+    private void migrateSubDimCompteToNumcompteUnique() {
+        // Repoint fact_balance.id_compte from "loser" duplicate rows to the kept row.
+        int repointed = jdbcTemplate.update("""
+            WITH winners AS (
+                SELECT numcompte, MIN(id) AS keep_id
+                FROM datamart.sub_dim_compte
+                WHERE numcompte IS NOT NULL
+                GROUP BY numcompte
+                HAVING COUNT(*) > 1
+            )
+            UPDATE datamart.fact_balance fb
+            SET id_compte = w.keep_id
+            FROM datamart.sub_dim_compte sdc
+            JOIN winners w ON w.numcompte = sdc.numcompte
+            WHERE fb.id_compte = sdc.id
+              AND sdc.id <> w.keep_id
+            """);
+        if (repointed > 0) {
+            log.warn("[COMPTA migration] Repointed {} fact_balance rows from duplicate sub_dim_compte rows to the canonical row", repointed);
+        }
+
+        // Remove duplicate sub_dim_compte rows (keep the smallest id per numcompte).
+        int deletedDuplicates = jdbcTemplate.update("""
+            DELETE FROM datamart.sub_dim_compte
+            WHERE id IN (
+                SELECT id
+                FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (PARTITION BY numcompte ORDER BY id) AS rn
+                    FROM datamart.sub_dim_compte
+                    WHERE numcompte IS NOT NULL
+                ) d
+                WHERE d.rn > 1
+            )
+            """);
+        if (deletedDuplicates > 0) {
+            log.warn("[COMPTA migration] Deleted {} duplicate sub_dim_compte rows that violated the new numcompte-unique invariant", deletedDuplicates);
+        }
+
+        // Drop the legacy compound uniqueness.
+        jdbcTemplate.execute("ALTER TABLE datamart.sub_dim_compte DROP CONSTRAINT IF EXISTS uq_sub_dim_compte");
+        jdbcTemplate.execute("DROP INDEX IF EXISTS datamart.ux_sub_dim_compte_num_libelle");
+
+        // Enforce uniqueness on numcompte alone going forward.
+        jdbcTemplate.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_sub_dim_compte_numcompte
+            ON datamart.sub_dim_compte (numcompte)
+            """);
     }
 
     private int populateDateDimension() {
