@@ -158,3 +158,60 @@ ALTER TABLE mapping.ratios_config
 
 ALTER TABLE mapping.ratios_config
 	DROP COLUMN IF EXISTS categorie;
+
+-- =============================================================================
+-- AI Module: chat-memory tables (ai schema).
+-- NOTE: pgvector extension + rag.documents table are created programmatically
+-- by AiSchemaInitializer so that a missing pgvector installation degrades
+-- gracefully (FTS-only RAG) instead of crashing the whole application.
+-- =============================================================================
+CREATE SCHEMA IF NOT EXISTS ai;
+CREATE SCHEMA IF NOT EXISTS rag;
+
+-- One session = one chat conversation with a title.
+CREATE TABLE IF NOT EXISTS ai.chat_sessions (
+	id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	user_id         VARCHAR(100) NOT NULL,
+	title           TEXT,
+	status          VARCHAR(20) DEFAULT 'ACTIVE',
+	created_at      TIMESTAMP DEFAULT now(),
+	updated_at      TIMESTAMP DEFAULT now(),
+	last_message_at TIMESTAMP
+);
+
+-- All messages across all sessions. Holds USER, AI and TOOL_EXECUTION rows.
+CREATE TABLE IF NOT EXISTS ai.chat_messages (
+	id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	session_id  UUID NOT NULL REFERENCES ai.chat_sessions(id) ON DELETE CASCADE,
+	role        VARCHAR(20) NOT NULL,
+	content     TEXT NOT NULL,
+	tool_name   VARCHAR(100),
+	tool_input  JSONB,
+	tool_output JSONB,
+	tokens_used INTEGER,
+	sequence_no BIGINT NOT NULL DEFAULT 0,
+	created_at  TIMESTAMP DEFAULT now()
+);
+
+-- Periodic summaries to compress long sessions.
+CREATE TABLE IF NOT EXISTS ai.chat_summaries (
+	id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	session_id  UUID NOT NULL REFERENCES ai.chat_sessions(id) ON DELETE CASCADE,
+	summary     TEXT NOT NULL,
+	turn_count  INTEGER,
+	created_at  TIMESTAMP DEFAULT now()
+);
+
+-- Financial entities extracted during a conversation (analytics / replay).
+CREATE TABLE IF NOT EXISTS ai.extracted_entities (
+	id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	session_id    UUID REFERENCES ai.chat_sessions(id) ON DELETE CASCADE,
+	entity_type   VARCHAR(50),
+	entity_value  VARCHAR(200),
+	created_at    TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user
+	ON ai.chat_sessions (user_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_session
+	ON ai.chat_messages (session_id, sequence_no);

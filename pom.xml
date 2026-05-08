@@ -30,6 +30,7 @@
 		<java.version>17</java.version>
 		<poi.version>5.2.5</poi.version>
 		<lombok.version>1.18.38</lombok.version>
+		<langchain4j.version>0.36.2</langchain4j.version>
 	</properties>
 	<dependencies>
 		<!-- Spring Boot Starters -->
@@ -92,7 +93,26 @@
 			<version>${lombok.version}</version>
 			<optional>true</optional>
 		</dependency>
-		
+
+		<!-- =====================================================================
+		     AI / LangChain4j stack
+		     ===================================================================== -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-open-ai</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-pgvector</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+
 		<!-- Testing -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

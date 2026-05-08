@@ -218,13 +218,6 @@ public class ComptaDatamartService {
             )
             """);
 
-        // Migration: enforce one row per numcompte (libellecompte is descriptive metadata only).
-        // Previously the table was declared UNIQUE (numcompte, libellecompte), which let a
-        // single account end up with multiple rows when its libellé changed between months.
-        // That in turn multiplied rows in fact_balance because populateFactBalance joins on
-        // numcompte alone.
-        migrateSubDimCompteToNumcompteUnique();
-
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS datamart.fact_balance (
                 id BIGSERIAL PRIMARY KEY,
@@ -307,6 +300,11 @@ public class ComptaDatamartService {
                 COALESCE(actif::TEXT, '__NULL__')
             )
             """);
+
+        // Migration: enforce one row per numcompte (libellecompte is descriptive metadata only).
+        // Must run after fact_balance exists because the migration repoints fact_balance.id_compte
+        // references away from duplicate sub_dim_compte rows.
+        migrateSubDimCompteToNumcompteUnique();
     }
 
     private int populateAgenceDimension() {
