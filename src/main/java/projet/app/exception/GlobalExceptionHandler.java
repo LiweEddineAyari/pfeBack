@@ -1,6 +1,7 @@
 package projet.app.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -11,15 +12,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(FormulaValidationException.class)
-    public ResponseEntity<ApiErrorResponse> handleFormulaValidation(
+        public ResponseEntity<?> handleFormulaValidation(
             FormulaValidationException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, "Formula validation failed");
+                if (sse != null) return sse;
         return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -31,10 +36,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidSqlException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidSql(
+        public ResponseEntity<?> handleInvalidSql(
             InvalidSqlException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -46,10 +53,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ParameterConfigNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleConfigNotFound(
+        public ResponseEntity<?> handleConfigNotFound(
             ParameterConfigNotFoundException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -61,10 +70,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(RatiosConfigNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleRatiosConfigNotFound(
+        public ResponseEntity<?> handleRatiosConfigNotFound(
             RatiosConfigNotFoundException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -76,10 +87,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(FamilleRatiosNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleFamilleRatiosNotFound(
+        public ResponseEntity<?> handleFamilleRatiosNotFound(
             FamilleRatiosNotFoundException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -91,10 +104,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(CategorieRatiosNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleCategorieRatiosNotFound(
+        public ResponseEntity<?> handleCategorieRatiosNotFound(
             CategorieRatiosNotFoundException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -106,10 +121,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(StressTestException.class)
-    public ResponseEntity<ApiErrorResponse> handleStressTest(
+        public ResponseEntity<?> handleStressTest(
             StressTestException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -121,7 +138,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> handleBeanValidation(
+        public ResponseEntity<?> handleBeanValidation(
             MethodArgumentNotValidException ex,
             HttpServletRequest request
     ) {
@@ -129,6 +146,12 @@ public class GlobalExceptionHandler {
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             details.add(fieldError.getField() + ": " + fieldError.getDefaultMessage());
         }
+
+                String message = details.isEmpty()
+                                ? "Request validation failed"
+                                : "Request validation failed: " + String.join(", ", details);
+                ResponseEntity<?> sse = sseErrorIfRequested(request, message);
+                if (sse != null) return sse;
 
         return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
@@ -141,10 +164,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(
+        public ResponseEntity<?> handleIllegalArgument(
             IllegalArgumentException ex,
             HttpServletRequest request
     ) {
+                ResponseEntity<?> sse = sseErrorIfRequested(request, ex.getMessage());
+                if (sse != null) return sse;
         return ResponseEntity.badRequest().body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -156,10 +181,16 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(
+        public ResponseEntity<?> handleUnexpected(
             Exception ex,
             HttpServletRequest request
     ) {
+                String message = ex.getMessage();
+                if (message == null || message.isBlank()) {
+                        message = "Unexpected internal server error";
+                }
+                ResponseEntity<?> sse = sseErrorIfRequested(request, message);
+                if (sse != null) return sse;
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -169,4 +200,25 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .build());
     }
+
+        private ResponseEntity<?> sseErrorIfRequested(HttpServletRequest request, String message) {
+                String accept = request.getHeader("Accept");
+                if (accept != null && accept.toLowerCase(Locale.ROOT)
+                        .contains(MediaType.TEXT_EVENT_STREAM_VALUE)) {
+                        String payload = "event: error\ndata: {\"message\":\"" +
+                                        escapeJson(message) + "\"}\n\n";
+                        return ResponseEntity.ok()
+                                        .contentType(MediaType.TEXT_EVENT_STREAM)
+                            .body(payload.getBytes(StandardCharsets.UTF_8));
+                }
+                return null;
+        }
+
+        private static String escapeJson(String value) {
+                if (value == null || value.isBlank()) return "Unknown error";
+                return value.replace("\\", "\\\\")
+                                .replace("\"", "\\\"")
+                                .replace("\n", "\\n")
+                                .replace("\r", "\\r");
+        }
 }

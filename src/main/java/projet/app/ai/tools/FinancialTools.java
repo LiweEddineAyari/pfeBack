@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import projet.app.ai.tools.dto.RatioTrendDTO;
+import projet.app.ai.tools.dto.StressTestToolRequestDTO;
 import projet.app.ai.tools.dto.ThresholdBriefDTO;
 import projet.app.dto.DashboardRowResponseDTO;
 import projet.app.dto.FormulaExecutionResponseDTO;
@@ -14,12 +15,13 @@ import projet.app.dto.ParameterConfigResponseDTO;
 import projet.app.dto.RatioExecutionResponseDTO;
 import projet.app.dto.RatiosConfigResponseDTO;
 import projet.app.dto.stresstest.StressTestDiagnosticsResponseDTO;
-import projet.app.dto.stresstest.StressTestRequestDTO;
 import projet.app.dto.stresstest.StressTestResponseDTO;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The set of {@link Tool}s that the {@code FinancialAiService} (LangChain4j proxy)
@@ -43,6 +45,8 @@ import java.util.List;
 public class FinancialTools {
 
     private static final ParameterizedTypeReference<List<DashboardRowResponseDTO>> DASHBOARD_LIST =
+            new ParameterizedTypeReference<>() {};
+        private static final ParameterizedTypeReference<List<String>> DATE_LIST =
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<RatiosConfigResponseDTO>> RATIO_CONFIG_LIST =
             new ParameterizedTypeReference<>() {};
@@ -104,33 +108,64 @@ public class FinancialTools {
         return client.get("/dashboard", DASHBOARD_LIST);
     }
 
-    // ─── TOOL 5: Compare a ratio across multiple dates (trend, computed in Java) ─
+    // ─── TOOL 5: Get available reference dates (fact_balance) ─────────────────
+
+    @Tool(name = "get_available_reference_dates",
+            value = "Return distinct reference dates available in fact_balance via " +
+                    "the dashboard module. Use before any trend / evolution request " +
+                    "to pick valid dates for comparison.")
+    public List<String> getAvailableReferenceDates() {
+        log.info("[tool] get_available_reference_dates");
+        return fetchAvailableDates();
+    }
+
+    // ─── TOOL 6: Compare a ratio across multiple dates (trend, computed in Java) ─
 
     @Tool(name = "compare_ratio_across_dates",
             value = "Compare a financial ratio value across multiple reference dates to " +
-                    "analyse its trend over time. Returns each (date, value) pair, the " +
-                    "absolute delta between the latest and earliest values, the percentage " +
-                    "change, and a direction tag (IMPROVING / DETERIORATING / STABLE). " +
-                    "Use whenever the user asks about evolution / trend / comparison.")
+                    "analyse its trend over time using dashboard-stored values (not live " +
+                    "ratio execution). Returns each (date, value) pair, the absolute delta " +
+                    "between the latest and earliest values, the percentage change, and a " +
+                    "direction tag (IMPROVING / DETERIORATING / STABLE). Use whenever the " +
+                    "user asks about evolution / trend / comparison.")
     public RatioTrendDTO compareRatioAcrossDates(
             @P("The ratio code, e.g. RS, RLCT") String code,
             @P("List of reference dates in YYYY-MM-DD format") List<String> dates) {
         log.info("[tool] compare_ratio_across_dates code={} dates={}", code, dates);
-        if (dates == null || dates.isEmpty()) {
+        if (dates == null || dates.isEmpty() || code == null || code.isBlank()) {
             return new RatioTrendDTO(code, List.of(), 0.0, 0.0, "STABLE");
+        }
+
+        String ratioCode = code.trim();
+        Set<String> availableSet = null;
+        try {
+            List<String> availableDates = fetchAvailableDates();
+            if (availableDates != null && !availableDates.isEmpty()) {
+                availableSet = new HashSet<>(availableDates);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("compare_ratio_across_dates: could not load available dates: {}", ex.getMessage());
         }
 
         List<RatioTrendDTO.DataPoint> points = new ArrayList<>();
         for (String date : dates) {
-            try {
-                RatioExecutionResponseDTO result = client.post(
-                        "/ratios/" + code + "/execute/" + date, null,
-                        RatioExecutionResponseDTO.class);
-                points.add(new RatioTrendDTO.DataPoint(date, result.getValue()));
-            } catch (RuntimeException ex) {
-                log.warn("compare_ratio_across_dates: could not execute {} at {}: {}",
-                        code, date, ex.getMessage());
+            if (date == null || date.isBlank()) {
                 points.add(new RatioTrendDTO.DataPoint(date, null));
+                continue;
+            }
+            String trimmedDate = date.trim();
+            if (availableSet != null && !availableSet.contains(trimmedDate)) {
+                points.add(new RatioTrendDTO.DataPoint(trimmedDate, null));
+                continue;
+            }
+            try {
+                List<DashboardRowResponseDTO> rows = getDashboardByDate(trimmedDate);
+                DashboardRowResponseDTO row = findByCode(rows, ratioCode);
+                points.add(new RatioTrendDTO.DataPoint(trimmedDate, row == null ? null : row.getValue()));
+            } catch (RuntimeException ex) {
+                log.warn("compare_ratio_across_dates: could not load dashboard value for {} at {}: {}",
+                        ratioCode, trimmedDate, ex.getMessage());
+                points.add(new RatioTrendDTO.DataPoint(trimmedDate, null));
             }
         }
         points.sort(Comparator.comparing(RatioTrendDTO.DataPoint::date));
@@ -145,7 +180,7 @@ public class FinancialTools {
                 : delta < -0.001 ? "DETERIORATING"
                 : "STABLE";
 
-        return new RatioTrendDTO(code, points, delta, percentChange, direction);
+        return new RatioTrendDTO(ratioCode, points, delta, percentChange, direction);
     }
 
     // ─── TOOL 6: Threshold breach categorisation (computed in Java) ─────────────
@@ -187,16 +222,78 @@ public class FinancialTools {
     // ─── TOOL 7: Run stress-test simulation ─────────────────────────────────────
 
     @Tool(name = "run_stress_test",
-            value = "Run an in-memory what-if stress-test simulation. Supports the PARAMETER " +
-                    "method (adjust parameter values via MULTIPLY, ADD, REPLACE) and the " +
-                    "BALANCE method (row-level balance overrides). Returns the original " +
-                    "value, simulated value, delta and impactPercent for every affected " +
-                    "ratio. Does NOT persist any data. Always verify date availability via " +
-                    "get_stress_test_diagnostics before calling.")
+            value = "Run an in-memory what-if stress-test simulation against POST " +
+                    "/stress-test/simulate. Does NOT persist any data. Returns original / " +
+                    "simulated / delta / impactPercent for every affected parameter and " +
+                    "ratio. " +
+                    "\n\nWHEN TO CALL: only when the user explicitly requests a stress " +
+                    "test / simulation / scénario / choc / shock AND provides concrete " +
+                    "shocks (a balance field + numeric value, or a parameter code + " +
+                    "operation). Forward-looking projection, trend or sustainability " +
+                    "questions are NOT stress tests — use compare_ratio_across_dates " +
+                    "instead. ALWAYS call get_stress_test_diagnostics first to verify " +
+                    "the referenceDate is available. " +
+                    "\n\nREQUEST SHAPE: {method, referenceDate, balanceAdjustments, " +
+                    "parameterAdjustments, parameterCodes?, ratioCodes?}. method MUST be " +
+                    "BALANCE or PARAMETER (uppercase). referenceDate is ISO YYYY-MM-DD. " +
+                    "\n\nBALANCE METHOD: each balanceAdjustment is " +
+                    "{operation, field, value, filters}. operation MUST be one of EXACTLY: " +
+                    "SET, ADD, SUBTRACT (NOT MULTIPLY/REPLACE — those are PARAMETER ops). " +
+                    "field MUST be one of EXACTLY: soldeorigine, soldeconvertie, " +
+                    "cumulmvtdb, cumulmvtcr, soldeinitdebmois, amount (note the trailing " +
+                    "'e' in soldeconvertie — do NOT write 'soldeconverti'). value is a " +
+                    "JSON number. filters is OPTIONAL and uses the filter grammar below; " +
+                    "when omitted, the adjustment applies to every fact_balance row of the " +
+                    "referenceDate. MANDATORY BALANCE CONSTRAINT: across the union of " +
+                    "touched rows, sum(positive deltas) must equal sum(negative deltas) " +
+                    "within 1e-6, otherwise the API returns UNBALANCED_SIMULATION. The " +
+                    "user normally provides pre-balanced numbers; pass them through " +
+                    "unchanged. " +
+                    "\n\nPARAMETER METHOD: each parameterAdjustment is " +
+                    "{operation, code, value?, formula?}. operation MUST be one of " +
+                    "EXACTLY: MULTIPLY, ADD, REPLACE, MODIFY_FORMULA. code is the " +
+                    "parameter code (FPE, RCR, RM, RO, FPT1, ENCTENG, ...). value is " +
+                    "required for MULTIPLY/ADD/REPLACE. MODIFY_FORMULA needs the formula " +
+                    "JSON field instead — use it only when the user explicitly asks to " +
+                    "redefine a parameter formula. " +
+                    "\n\nFILTER GRAMMAR (used in balanceAdjustments[].filters): " +
+                    "{logic: 'AND'|'OR', conditions: [...], groups: [...]}. Each condition " +
+                    "is {field, operator, value}. Allowed operators: EQ ('='), NE ('!='), " +
+                    "GT, GTE, LT, LTE, LIKE, STARTS_WITH, ENDS_WITH, CONTAINS, IN, " +
+                    "NOT_IN, BETWEEN (array of 2), IS_NULL, IS_NOT_NULL. For 'commence " +
+                    "par X' / 'starts with X', use operator STARTS_WITH with value 'X' " +
+                    "(no '%'), or LIKE with value 'X%'. Common filter fields: " +
+                    "subDimChapitre.chapitre (chapter), numcompte (account), " +
+                    "subDimDevise.devise (currency), pays (country), grpaffaire (group), " +
+                    "datevalue (date). Use the dotted path subDimChapitre.chapitre when " +
+                    "the user mentions 'chapitre' — the unqualified 'chapitre' is NOT " +
+                    "registered. " +
+                    "\n\nWORKED EXAMPLE — BALANCE: user says 'ajouter 5 au solde converti " +
+                    "pour les enregistrements dont le chapitre commence par 21, et " +
+                    "soustraire 0.000975 au solde converti pour le chapitre commençant " +
+                    "par 20, à la date 2026-03-31'. Build: " +
+                    "{ \"method\":\"BALANCE\", \"referenceDate\":\"2026-03-31\", " +
+                    "\"balanceAdjustments\":[" +
+                    "{\"operation\":\"ADD\",\"field\":\"soldeconvertie\",\"value\":5," +
+                    "\"filters\":{\"logic\":\"AND\",\"conditions\":[{\"field\":\"subDimChapitre.chapitre\"," +
+                    "\"operator\":\"STARTS_WITH\",\"value\":\"21\"}]}}," +
+                    "{\"operation\":\"SUBTRACT\",\"field\":\"soldeconvertie\"," +
+                    "\"value\":0.0009751911374629428,\"filters\":{\"logic\":\"AND\"," +
+                    "\"conditions\":[{\"field\":\"subDimChapitre.chapitre\"," +
+                    "\"operator\":\"STARTS_WITH\",\"value\":\"20\"}]}}]} . " +
+                    "\n\nWORKED EXAMPLE — PARAMETER: user says 'réduction de 15% du FPE " +
+                    "au 2024-12-31'. Build: { \"method\":\"PARAMETER\", " +
+                    "\"referenceDate\":\"2024-12-31\", \"parameterAdjustments\":[" +
+                    "{\"operation\":\"MULTIPLY\",\"code\":\"FPE\",\"value\":0.85}]} . " +
+                    "\n\nERROR HANDLING: if the API returns UNKNOWN_FIELD, the field name " +
+                    "is wrong — re-check the allowed list above. If UNBALANCED_SIMULATION, " +
+                    "explain the constraint to the user and ask them to provide balanced " +
+                    "amounts. If NO_DATA_FOR_DATE, surface the available dates from the " +
+                    "diagnostics call.")
     public StressTestResponseDTO runStressTest(
             @P("Stress-test request: method, referenceDate, balanceAdjustments or " +
                     "parameterAdjustments, optional parameterCodes / ratioCodes scope.")
-            StressTestRequestDTO request) {
+            StressTestToolRequestDTO request) {
         log.info("[tool] run_stress_test method={} date={}",
                 request.getMethod(), request.getReferenceDate());
         return client.post("/stress-test/simulate", request, StressTestResponseDTO.class);
@@ -280,5 +377,21 @@ public class FinancialTools {
             }
         }
         return null;
+    }
+
+    private static DashboardRowResponseDTO findByCode(List<DashboardRowResponseDTO> rows, String code) {
+        if (rows == null || rows.isEmpty() || code == null || code.isBlank()) {
+            return null;
+        }
+        for (DashboardRowResponseDTO row : rows) {
+            if (row != null && row.getCode() != null && row.getCode().equalsIgnoreCase(code)) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    private List<String> fetchAvailableDates() {
+        return client.get("/dashboard/dates", DATE_LIST);
     }
 }

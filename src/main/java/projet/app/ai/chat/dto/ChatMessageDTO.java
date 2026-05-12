@@ -19,6 +19,7 @@ public class ChatMessageDTO {
     private UUID sessionId;
     private String role;
     private String content;
+    private String promptText;
     private String toolName;
     private String toolInput;
     private String toolOutput;
@@ -31,6 +32,7 @@ public class ChatMessageDTO {
                 .sessionId(e.getSessionId())
                 .role(e.getRole())
                 .content(e.getContent())
+                .promptText(e.getPromptText())
                 .toolName(e.getToolName())
                 .toolInput(e.getToolInput())
                 .toolOutput(e.getToolOutput())

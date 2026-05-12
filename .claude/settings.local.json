@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvnw.cmd -q compile -DskipTests)",
+      "Bash(echo \"EXIT=$?\")"
+    ]
+  }
+}

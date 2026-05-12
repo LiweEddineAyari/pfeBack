@@ -43,6 +43,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JpaChatMemoryStore implements ChatMemoryStore {
 
+    private static final String RAG_CONTEXT_MARKER = "Answer using the following information:";
+
     private final ChatMessageRepository repository;
     private final ObjectMapper objectMapper;
 
@@ -113,6 +115,7 @@ public class JpaChatMemoryStore implements ChatMemoryStore {
         }
         String role;
         String content;
+        String promptText = null;
         String toolName = null;
         String toolInput = null;
         String toolOutput = null;
@@ -120,6 +123,7 @@ public class JpaChatMemoryStore implements ChatMemoryStore {
         if (msg instanceof UserMessage um) {
             role = "USER";
             content = um.singleText();
+            promptText = extractPromptText(content);
         } else if (msg instanceof AiMessage am) {
             role = "AI";
             content = am.text() == null ? "" : am.text();
@@ -144,7 +148,7 @@ public class JpaChatMemoryStore implements ChatMemoryStore {
             role = "TOOL_EXECUTION";
             content = tem.text() == null ? "" : tem.text();
             toolName = tem.toolName();
-            toolOutput = content;
+            toolOutput = serializeJsonOrString(content);
         } else {
             log.debug("Skipping unsupported message kind: {}", msg.getClass().getSimpleName());
             return null;
@@ -155,12 +159,44 @@ public class JpaChatMemoryStore implements ChatMemoryStore {
                 .sessionId(sessionId)
                 .role(role)
                 .content(content)
+                .promptText(promptText)
                 .toolName(toolName)
                 .toolInput(toolInput)
                 .toolOutput(toolOutput)
                 .sequenceNo(seq)
                 .createdAt(now)
                 .build();
+    }
+
+    private String extractPromptText(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+        int markerIndex = content.indexOf(RAG_CONTEXT_MARKER);
+        if (markerIndex <= 0) {
+            return content;
+        }
+        return content.substring(0, markerIndex).trim();
+    }
+
+    private String serializeJsonOrString(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                return objectMapper.writeValueAsString(objectMapper.readTree(trimmed));
+            } catch (JsonProcessingException ex) {
+                // Fall through to plain string serialization.
+            }
+        }
+        try {
+            return objectMapper.writeValueAsString(raw);
+        } catch (JsonProcessingException ex) {
+            log.warn("Could not serialize tool output as JSON: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private static UUID parse(Object memoryId) {

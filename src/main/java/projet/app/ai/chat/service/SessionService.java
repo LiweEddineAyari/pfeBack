@@ -80,6 +80,16 @@ public class SessionService {
         sessionRepository.archive(sessionId, Instant.now());
     }
 
+    @Transactional
+    public void delete(UUID sessionId) {
+        sessionRepository.deleteById(sessionId);
+    }
+
+    @Transactional
+    public void updateTitle(UUID sessionId, String title) {
+        sessionRepository.updateTitle(sessionId, title, Instant.now());
+    }
+
     @Transactional(readOnly = true)
     public Page<ChatSessionDTO> listForUser(String userId, Pageable pageable) {
         return sessionRepository

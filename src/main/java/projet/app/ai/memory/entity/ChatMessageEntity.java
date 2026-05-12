@@ -43,6 +43,9 @@ public class ChatMessageEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "prompt_text", columnDefinition = "TEXT")
+    private String promptText;
+
     @Column(name = "tool_name", length = 100)
     private String toolName;
 

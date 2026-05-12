@@ -345,7 +345,8 @@ These tools are called **automatically by the LLM** — you never call them dire
 | `execute_ratio` | Compute a financial ratio (RCET1, RT1, RL, etc.) at a date | `code`, `date` |
 | `get_dashboard_by_date` | All ratios with values + thresholds for a date | `date` |
 | `get_all_dashboard_rows` | All dashboard rows across all dates | — |
-| `compare_ratio_across_dates` | Ratio trend: delta, % change, IMPROVING / DETERIORATING / STABLE | `code`, `dates[]` |
+| `get_available_reference_dates` | Available reference dates from fact_balance | — |
+| `compare_ratio_across_dates` | Ratio trend from dashboard values: delta, % change, IMPROVING / DETERIORATING / STABLE | `code`, `dates[]` |
 | `check_threshold_breaches` | Bucket ratios by breach severity: CRITICAL / ALERT / WARNING / HEALTHY | `date` |
 | `run_stress_test` | In-memory stress simulation (PARAMETER or BALANCE method) | `request` object |
 | `get_stress_test_diagnostics` | Available stress-test dates + row counts | — |

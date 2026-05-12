@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS ai.chat_messages (
 	session_id  UUID NOT NULL REFERENCES ai.chat_sessions(id) ON DELETE CASCADE,
 	role        VARCHAR(20) NOT NULL,
 	content     TEXT NOT NULL,
+	prompt_text TEXT,
 	tool_name   VARCHAR(100),
 	tool_input  JSONB,
 	tool_output JSONB,
@@ -192,6 +193,9 @@ CREATE TABLE IF NOT EXISTS ai.chat_messages (
 	sequence_no BIGINT NOT NULL DEFAULT 0,
 	created_at  TIMESTAMP DEFAULT now()
 );
+
+ALTER TABLE ai.chat_messages
+	ADD COLUMN IF NOT EXISTS prompt_text TEXT;
 
 -- Periodic summaries to compress long sessions.
 CREATE TABLE IF NOT EXISTS ai.chat_summaries (

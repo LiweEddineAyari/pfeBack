@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -55,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @RestController
-@RequestMapping("/ai")
+@RequestMapping({"/ai", "/api/ai"})
 @RequiredArgsConstructor
 public class AiChatController {
 
@@ -148,7 +149,7 @@ public class AiChatController {
     }
 
     /** A non-streaming health probe so the frontend can verify the AI module is wired. */
-    @PostMapping(value = "/chat/ping")
+    @GetMapping(value = "/chat/ping", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> ping() {
         boolean ready = aiServiceProvider.getIfAvailable() != null;
         return ResponseEntity.ok(Map.of(

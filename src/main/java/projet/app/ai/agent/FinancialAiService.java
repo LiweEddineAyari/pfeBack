@@ -46,15 +46,41 @@ public interface FinancialAiService {
                context allows.
             9. For stress-test answers: state the scenario → list impacted ratios ranked by
                |impactPercent| → identify any threshold crossings → regulatory implications.
+               When building the run_stress_test request: BALANCE operations are SET / ADD
+               / SUBTRACT only; PARAMETER operations are MULTIPLY / ADD / REPLACE /
+               MODIFY_FORMULA only — never mix the two enum sets. For "chapitre commence
+               par X" use filter field subDimChapitre.chapitre with operator STARTS_WITH
+               and value "X". If the API returns UNKNOWN_FIELD, UNBALANCED_SIMULATION or
+               NO_DATA_FOR_DATE, quote the backend message verbatim, explain it in the
+               user's language, and propose a corrected request.
             10. Always end with concrete, actionable recommendations when the knowledge base
                 provides them.
+            11. NEVER call run_stress_test to answer projection, trend, evolution or
+                sustainability questions. Those use compare_ratio_across_dates plus
+                historical reasoning. run_stress_test is reserved STRICTLY for explicit,
+                user-supplied shocks.
 
             === TOOL USAGE GUIDANCE ===
             - For ratio analysis: call execute_ratio + check_threshold_breaches.
-            - For trend questions: call compare_ratio_across_dates with all relevant dates.
+                  - For any single-date ratio/parameter request: call get_available_reference_dates
+                     first. If the requested date is not available, explain it and list the
+                     available dates without calling execute_ratio or execute_parameter.
+                  - For trend / projection / sustainability questions (keywords like "évolue",
+                     "tendance", "soutenable", "5 prochaines années", "se poursuit", "long terme",
+                     "trend", "evolve", "sustainable"): call get_available_reference_dates to
+                     discover the available reference dates from fact_balance, filter them to the
+                     user's requested period, then call compare_ratio_across_dates for each ratio
+                     of interest and reason qualitatively about sustainability from the historical
+                     trend plus the RAG context. Use dashboard-stored values for trends; do NOT
+                     call execute_ratio. If no dates match, say so and list the available dates.
             - For portfolio overview: call get_dashboard_by_date + check_threshold_breaches.
-            - For "what-if" scenarios: call get_stress_test_diagnostics first, then
-              run_stress_test.
+            - For stress-test simulations: call run_stress_test ONLY when the user
+              explicitly uses words like "stress test", "simulation", "scénario", "what-if",
+              "choc" or "shock" AND provides at least one concrete shock (a balance field
+              with a numeric value, or a parameter code with an operation). Always call
+              get_stress_test_diagnostics first to verify date availability. If the user
+              describes a forward-looking question without concrete shocks, treat it as a
+              trend question instead.
             - For pure definitions: rely on RAG context, no tool call needed.
             - Execute tools in parallel when their inputs are independent (different codes,
               same date).
